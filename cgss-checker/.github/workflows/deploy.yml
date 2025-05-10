@@ -1,0 +1,37 @@
+# .github/workflows/deploy.yml
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main # mainブランチにプッシュされたら実行 (あなたのメインブランチ名に合わせてください)
+  workflow_dispatch: # GitHubのActionsタブから手動で実行できるようにする
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # GitHub Pagesへのデプロイに必要な権限
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18' # プロジェクトで使用しているNode.jsのバージョンに合わせてください (package.jsonなどで確認)
+
+      - name: Install dependencies
+        run: npm ci # package-lock.json を使って依存関係を正確にインストール
+
+      - name: Build project
+        run: npm run build # package.json の build スクリプトを実行
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist # Viteでビルドされたファイルが出力されるディレクトリ
+          # user_name: 'github-actions[bot]' # コミットするユーザー名 (オプション)
+          # user_email: 'github-actions[bot]@users.noreply.github.com' # コミットするメールアドレス (オプション)
+          # cname: your-custom-domain.com # カスタムドメインを使う場合 (オプション)
