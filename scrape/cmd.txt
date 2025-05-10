@@ -1,0 +1,20 @@
+SSR のみダウンロードする場合:
+python download_cgss_images_cli.py --rarity SSR
+Use code with caution.
+Bash
+または
+python download_cgss_images_cli.py -r SSR
+Use code with caution.
+Bash
+SSR と SR をダウンロードする場合:
+python download_cgss_images_cli.py --rarity SSR SR
+Use code with caution.
+Bash
+全てのレアリティをダウンロードする場合 (デフォルト):
+python download_cgss_images_cli.py
+Use code with caution.
+Bash
+ヘルプを表示する場合:
+python download_cgss_images_cli.py --help
+Use code with caution.
+Bash
