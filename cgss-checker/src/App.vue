@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import Papa from 'papaparse';
 import CardItem from './components/CardItem.vue';
+import StarRankEditor from './views/StarRankEditor.vue'; // StarRankEditorをインポート
 
 // --- データと状態管理 ---
 const allCardsRaw = ref({});
@@ -21,6 +22,21 @@ const selectedAttribute = ref('All');
 const showOwned = ref('All');
 const selectedFilterCategory = ref('All');
 
+// --- スターランク編集画面の表示状態 ---
+const isEditingStarRank = ref(false);
+
+const goToStarRankEditor = () => {
+  isEditingStarRank.value = true;
+};
+
+const handleBackFromEditor = () => {
+  isEditingStarRank.value = false;
+  loadOwnedDataFromLocalStorage(); // エディタでの変更を反映するために再読み込み
+  // 必要であれば、表示中のカードリストを強制的に更新する
+  // 例: selectedRarity.value = selectedRarity.value + ''; // トリガー用
+  console.log('Returned from star rank editor. Reloading owned data.');
+};
+
 // --- トップに戻るボタン用の状態とロジック ---
 const showScrollToTopButton = ref(false);
 const scrollThreshold = 200;
@@ -35,10 +51,10 @@ const scrollToTop = () => {
 
 // --- 全チェッククリア用のメソッド ---
 const clearAllOwnedChecks = () => {
-  if (confirm('本当に全てのカードの所持チェックをクリアしますか？この操作は元に戻せません。')) {
+  if (confirm('本当に全てのカードの所持情報（スターランク含む）をクリアしますか？この操作は元に戻せません。')) {
     ownedCards.value = {};
     saveOwnedDataToLocalStorage();
-    console.log('All owned checks cleared.');
+    console.log('All owned checks and star ranks cleared.');
   }
 };
 
@@ -119,23 +135,32 @@ function saveOwnedDataToLocalStorage() {
   try { localStorage.setItem('cgssOwnedCards', JSON.stringify(ownedCards.value)); } catch (e) { console.error(e); }
 }
 
-function handleToggleOwned(clickedCard) {
-  if (!clickedCard || !clickedCard.id) return;
-  const cardId = String(clickedCard.id);
-  if (ownedCards.value[cardId]) { delete ownedCards.value[cardId]; } else { ownedCards.value[cardId] = true; }
+function handleToggleStarRankBasic({ cardId, starRank }) {
+  const currentStar = ownedCards.value[String(cardId)] || 0;
+  const newStarRank = currentStar > 0 ? 0 : 1; // Toggle between 0 and 1
+
+  if (newStarRank > 0) {
+    ownedCards.value[String(cardId)] = newStarRank;
+  } else {
+    delete ownedCards.value[String(cardId)];
+  }
   saveOwnedDataToLocalStorage();
+  console.log(`Basic star rank toggled for card ID ${cardId} to ${newStarRank}`);
 }
 
 const cardsForSelectedRarity = computed(() => {
   const rawData = allCardsRaw.value[selectedRarity.value];
   if (!Array.isArray(rawData)) return [];
-  return rawData.map(card => ({ ...card, owned: !!ownedCards.value[String(card.id)] }));
+  return rawData.map(card => ({
+    ...card,
+    starRank: ownedCards.value[String(card.id)] || 0
+  }));
 });
 
 const ownedCountForSelectedRarity = computed(() => {
   const currentCards = cardsForSelectedRarity.value;
   if (!Array.isArray(currentCards)) return 0;
-  return currentCards.filter(card => card.owned).length;
+  return currentCards.filter(card => card.starRank > 0).length;
 });
 
 const totalCountForSelectedRarity = computed(() => {
@@ -174,8 +199,8 @@ const filteredCards = computed(() => {
     const attributeMatch = selectedAttribute.value === 'All' || card.attribute === selectedAttribute.value;
     const categoryMatch = selectedFilterCategory.value === 'All' || card.filter_category === selectedFilterCategory.value;
     let ownedMatch = true;
-    if (showOwned.value === 'Owned') ownedMatch = card.owned;
-    else if (showOwned.value === 'NotOwned') ownedMatch = !card.owned;
+    if (showOwned.value === 'Owned') ownedMatch = card.starRank > 0;
+    else if (showOwned.value === 'NotOwned') ownedMatch = card.starRank === 0;
     return nameMatch && attributeMatch && categoryMatch && ownedMatch;
   });
 });
@@ -184,9 +209,11 @@ const rarityOptions = computed(() => Object.keys(rarityMapping));
 const attributeOptions = ref(['All', 'Cu', 'Co', 'Pa', 'Unknown']);
 
 onMounted(async () => {
+  console.log('App.vue onMounted started.');
   loadOwnedDataFromLocalStorage();
   await loadCardsForCurrentRarity();
   window.addEventListener('scroll', handleScroll);
+  console.log('App.vue onMounted finished.');
 });
 
 onUnmounted(() => {
@@ -195,6 +222,7 @@ onUnmounted(() => {
 
 watch(selectedRarity, async (newRarity, oldRarity) => {
   if (newRarity !== oldRarity && newRarity) {
+    console.log(`Rarity changed from ${oldRarity} to ${newRarity}. Loading new data...`);
     await loadCardsForCurrentRarity();
   }
 });
@@ -202,97 +230,105 @@ watch(selectedRarity, async (newRarity, oldRarity) => {
 
 <template>
   <div id="app-container">
-    <header class="app-header">
-      <h1>デレステカードチェッカー</h1>
-      <div class="stats-bar">
-        <p>
-          選択中レアリティ ({{ selectedRarity }}):
-          {{ ownedCountForSelectedRarity }} / {{ totalCountForSelectedRarity }}枚
-          ({{ ownedPercentageForSelectedRarity }}%) |
-          表示中: {{ filteredCards.length }}枚 |
-          総所持数(全レアリティ): {{ Object.keys(ownedCards).length }}枚
-        </p>
-      </div>
-    </header>
+    <!-- StarRankEditor を表示する場合 -->
+    <StarRankEditor v-if="isEditingStarRank" @back-to-checker="handleBackFromEditor" />
 
-    <main class="main-content">
-      <div class="controls">
-        <div class="control-group">
-          <label for="rarity-select">レアリティ:</label>
-          <select id="rarity-select" v-model="selectedRarity">
-            <option v-for="rarityKey in rarityOptions" :key="rarityKey" :value="rarityKey">
-              {{ rarityKey }}
-            </option>
-          </select>
+    <!-- 通常のチェッカー画面 (isEditingStarRank が false の場合) -->
+    <div v-else>
+      <header class="app-header">
+        <h1>デレステカードチェッカー</h1>
+        <div class="stats-bar">
+          <p>
+            選択中レアリティ ({{ selectedRarity }}):
+            {{ ownedCountForSelectedRarity }} / {{ totalCountForSelectedRarity }}枚
+            ({{ ownedPercentageForSelectedRarity }}%) |
+            表示中: {{ filteredCards.length }}枚 |
+            総所持数(全レアリティ): {{ Object.keys(ownedCards).length }}枚
+          </p>
+          <button @click="goToStarRankEditor" class="edit-star-rank-button">スターランク編集</button>
         </div>
-        <div class="control-group">
-          <button @click="clearAllOwnedChecks" class="clear-all-button">全チェッククリア</button>
-        </div>
-      </div>
+      </header>
 
-      <div class="filters">
-        <input type="text" id="search-term-input" v-model="searchTerm" placeholder="アイドル名で検索..." class="filter-input">
-        <div class="filter-group">
-          <label for="attribute-select">属性:</label>
-          <select id="attribute-select" v-model="selectedAttribute">
-            <option v-for="attr in attributeOptions" :key="attr" :value="attr">
-              {{ attr === 'All' ? '全属性' : attr }}
-            </option>
-          </select>
+      <main class="main-content">
+        <div class="controls">
+          <div class="control-group">
+            <label for="rarity-select">レアリティ:</label>
+            <select id="rarity-select" v-model="selectedRarity">
+              <option v-for="rarityKey in rarityOptions" :key="rarityKey" :value="rarityKey">
+                {{ rarityKey }}
+              </option>
+            </select>
+          </div>
+          <div class="control-group">
+            <button @click="clearAllOwnedChecks" class="clear-all-button">全チェッククリア</button>
+          </div>
         </div>
-        <div class="filter-group">
-          <label for="category-select">カテゴリ:</label>
-          <select id="category-select" v-model="selectedFilterCategory">
-            <option v-for="category in filterCategoryOptions" :key="category" :value="category">
-              {{ category === 'All' ? 'すべて' : category }}
-            </option>
-          </select>
-        </div>
-        <div class="filter-group">
-          <label for="owned-select">表示:</label>
-          <select id="owned-select" v-model="showOwned">
-            <option value="All">すべて</option>
-            <option value="Owned">所持のみ</option>
-            <option value="NotOwned">未所持のみ</option>
-          </select>
-        </div>
-      </div>
 
-      <div v-if="isLoading" class="loading-indicator">
-        <p>カードデータを読み込み中...</p>
-      </div>
-      <div v-else-if="filteredCards.length > 0" class="card-grid">
-        <CardItem
-          v-for="card in filteredCards"
-          :key="`${card.rarity}-${card.id}`"
-          :card="card"
-          @toggle-owned="handleToggleOwned"
-        />
-      </div>
-      <div v-else class="no-cards">
-        <p>表示するカードがありません。フィルター条件を見直してください。</p>
-        <p v-if="!isLoading && Array.isArray(allCardsRaw[selectedRarity]) && allCardsRaw[selectedRarity].length > 0 && filteredCards.length === 0">
-          (選択中の「{{ selectedRarity }}」には {{ allCardsRaw[selectedRarity].length }} 枚のカードがありますが、現在のフィルターで絞り込まれています)
-        </p>
-        <p v-if="!isLoading && (!allCardsRaw[selectedRarity] || (Array.isArray(allCardsRaw[selectedRarity]) && allCardsRaw[selectedRarity].length === 0))">
-          (選択中の「{{ selectedRarity }}」のデータが見つからないか、空のようです。CSVファイルの内容やコンソールのログを確認してください。)
-        </p>
-      </div>
-    </main>
+        <div class="filters">
+          <input type="text" id="search-term-input" v-model="searchTerm" placeholder="アイドル名で検索..." class="filter-input">
+          <div class="filter-group">
+            <label for="attribute-select">属性:</label>
+            <select id="attribute-select" v-model="selectedAttribute">
+              <option v-for="attr in attributeOptions" :key="attr" :value="attr">
+                {{ attr === 'All' ? '全属性' : attr }}
+              </option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="category-select">カテゴリ:</label>
+            <select id="category-select" v-model="selectedFilterCategory">
+              <option v-for="category in filterCategoryOptions" :key="category" :value="category">
+                {{ category === 'All' ? 'すべて' : category }}
+              </option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label for="owned-select">表示:</label>
+            <select id="owned-select" v-model="showOwned">
+              <option value="All">すべて</option>
+              <option value="Owned">所持(☆1以上)</option>
+              <option value="NotOwned">未所持(☆0)</option>
+            </select>
+          </div>
+        </div>
 
-    <button v-if="showScrollToTopButton" @click="scrollToTop" class="scroll-to-top-button">
-      ↑ Top
-    </button>
+        <div v-if="isLoading" class="loading-indicator">
+          <p>カードデータを読み込み中...</p>
+        </div>
+        <div v-else-if="filteredCards.length > 0" class="card-grid">
+          <CardItem
+            v-for="card in filteredCards"
+            :key="`${card.rarity}-${card.id}`"
+            :card="card"
+            @toggle-star-rank-basic="handleToggleStarRankBasic"
+          />
+        </div>
+        <div v-else class="no-cards">
+          <p>表示するカードがありません。フィルター条件を見直してください。</p>
+          <p v-if="!isLoading && Array.isArray(allCardsRaw[selectedRarity]) && allCardsRaw[selectedRarity].length > 0 && filteredCards.length === 0">
+            (選択中の「{{ selectedRarity }}」には {{ allCardsRaw[selectedRarity].length }} 枚のカードがありますが、現在のフィルターで絞り込まれています)
+          </p>
+          <p v-if="!isLoading && (!allCardsRaw[selectedRarity] || (Array.isArray(allCardsRaw[selectedRarity]) && allCardsRaw[selectedRarity].length === 0))">
+            (選択中の「{{ selectedRarity }}」のデータが見つからないか、空のようです。CSVファイルの内容やコンソールのログを確認してください。)
+          </p>
+        </div>
+      </main>
+
+      <button v-if="showScrollToTopButton" @click="scrollToTop" class="scroll-to-top-button">
+        ↑ Top
+      </button>
+    </div>
   </div>
 </template>
 
 <style>
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-  background-color: #f0f2f5;
-  color: #333;
-  padding-top: 120px; /* 固定ヘッダーの高さを考慮 (調整が必要) */
+  font-family: 'M PLUS Rounded 1c', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; /* ポップな丸ゴシック系フォント例 */
+  background-color: #e6f7ff; /* 明るい水色系の背景 */
+  color: #4f4f4f; /* 少し濃いめのグレー */
+  line-height: 1.6;
+  padding-top: 130px; /* 固定ヘッダーの高さ (要調整) */
 }
 
 #app-container {
@@ -306,31 +342,36 @@ body {
   top: 0;
   left: 0;
   width: 100%;
-  background-color: #fff;
-  padding: 10px 20px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  background: linear-gradient(135deg, #69c0ff 0%, #b37feb 100%); /* 明るいグラデーション */
+  color: white;
+  padding: 12px 20px;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.15);
   z-index: 1000;
   box-sizing: border-box;
 }
 .app-header h1 {
   text-align: center;
   margin: 0 0 10px 0;
-  color: #1890ff;
+  font-size: 2em; /* 少し大きめ */
+  font-weight: 700; /* 太め */
+  color: white;
+  text-shadow: 1px 1px 3px rgba(0,0,0,0.2);
 }
 .stats-bar {
   text-align: center;
   font-size: 0.9em;
-  color: #555;
-  border-top: 1px solid #eee;
-  padding-top: 8px;
+  background-color: rgba(255, 255, 255, 0.2); /* ヘッダー背景に対して少し透明度を上げる */
+  padding: 10px;
+  border-radius: 6px;
   margin-top: 8px;
+  color: #fff; /* 文字色を白に */
 }
 .stats-bar p {
   margin: 0;
 }
 
 .main-content {
-  /* padding-topはbody側で対応 */
+  /* 特に変更なし */
 }
 
 .controls, .filters {
@@ -339,9 +380,9 @@ body {
   gap: 15px;
   margin-bottom: 20px;
   padding: 15px;
-  background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  background-color: rgba(255, 255, 255, 0.9); /* 少し透明感のある白 */
+  border-radius: 10px; /* 角丸を少し大きく */
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
 }
 
 .control-group, .filter-group {
@@ -352,16 +393,56 @@ body {
 
 label {
   font-weight: 500;
+  color: #333;
 }
 
 select, .filter-input {
-  padding: 8px 12px;
-  border: 1px solid #d9d9d9;
-  border-radius: 4px;
-  font-size: 1em;
+  padding: 10px 14px;
+  border: 1px solid #d0d0d0;
+  border-radius: 8px; /* 角丸を少し大きく */
+  font-size: 0.95em;
+  background-color: #fff;
+  transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
 }
-.filter-input {
-  flex-grow: 1;
+select:focus, .filter-input:focus {
+  border-color: #69c0ff; /* アクセントカラー */
+  outline: 0;
+  box-shadow: 0 0 0 0.2rem rgba(105, 192, 255, 0.3);
+}
+
+button {
+  padding: 9px 15px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9em;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+button:active {
+  transform: translateY(0px);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.clear-all-button {
+  background-color: #ff7875; /* 少し明るい赤 */
+  color: white;
+}
+.clear-all-button:hover {
+  background-color: #f5222d;
+}
+
+.edit-star-rank-button {
+  background-color: #73d13d; /* 少し明るい緑 */
+  color: white;
+}
+.edit-star-rank-button:hover {
+  background-color: #52c41a;
 }
 
 .loading-indicator, .no-cards {
@@ -369,17 +450,18 @@ select, .filter-input {
   padding: 40px 20px;
   font-size: 1.1em;
   color: #777;
-  background-color: #fff;
+  background-color: #ffffff;
   border-radius: 8px;
-  margin-top: 20px;
+  margin-top: 24px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.08);
 }
 .no-cards p {
-  margin: 5px 0;
+  margin: 8px 0;
 }
 
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
   gap: 20px;
 }
 
@@ -387,32 +469,26 @@ select, .filter-input {
   position: fixed;
   bottom: 30px;
   right: 30px;
-  padding: 10px 15px;
-  background-color: #1890ff;
+  padding: 0;
+  width: 50px; /* 少し小さく */
+  height: 50px;
+  background-color: #69c0ff; /* ヘッダーのグラデーションに合う色 */
   color: white;
   border: none;
-  border-radius: 5px;
+  border-radius: 50%;
   cursor: pointer;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
   z-index: 1001;
-  opacity: 0.8;
-  transition: opacity 0.3s ease;
+  opacity: 0.85;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3em;
 }
-
 .scroll-to-top-button:hover {
   opacity: 1;
+  transform: scale(1.1);
 }
 
-.clear-all-button {
-  padding: 8px 12px;
-  background-color: #ff4d4f;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9em;
-}
-.clear-all-button:hover {
-  background-color: #d9363e;
-}
 </style>

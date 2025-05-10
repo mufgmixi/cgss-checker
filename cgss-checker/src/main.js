@@ -1,5 +1,7 @@
 import { createApp } from 'vue'
-import './style.css'
 import App from './App.vue'
+import router from './router' // 作成したルーターをインポート
 
-createApp(App).mount('#app')
+createApp(App)
+  .use(router) // ルーターを適用
+  .mount('#app')
