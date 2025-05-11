@@ -2,36 +2,55 @@
 name: Deploy to GitHub Pages
 
 on:
+  # mainブランチへのpush時にワークフローを実行
   push:
     branches:
-      - main # mainブランチにプッシュされたら実行 (あなたのメインブランチ名に合わせてください)
-  workflow_dispatch: # GitHubのActionsタブから手動で実行できるようにする
+      - main # あなたのリポジトリのメインブランチ名に合わせてください (例: master)
+
+  # Actionsタブから手動でワークフローを実行できるようにする
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
+    # 実行環境として最新のUbuntuを指定
     runs-on: ubuntu-latest
+
+    # ジョブに与える権限を設定
     permissions:
-      contents: write # GitHub Pagesへのデプロイに必要な権限
+      contents: write # actions/checkout や peaceiris/actions-gh-pages がリポジトリに書き込むために必要
+
     steps:
+      # Step 1: リポジトリのコードをチェックアウト
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v4 # 最新の安定バージョンを使用
 
+      # Step 2: Node.js環境をセットアップ
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v4 # 最新の安定バージョンを使用
         with:
-          node-version: '18' # プロジェクトで使用しているNode.jsのバージョンに合わせてください (package.jsonなどで確認)
+          node-version: '18' # プロジェクトで使用しているNode.jsのバージョン (例: 18, 20など)
+          cache: 'npm' # npmのキャッシュを有効にする
 
+      # Step 3: 依存関係をインストール
+      # package-lock.json が存在する場合は npm ci を使うのが推奨 (より再現性の高いビルドのため)
       - name: Install dependencies
-        run: npm ci # package-lock.json を使って依存関係を正確にインストール
+        run: npm ci
 
+      # Step 4: プロジェクトをビルド
+      # package.json の "build" スクリプトが vite build を実行することを想定
       - name: Build project
-        run: npm run build # package.json の build スクリプトを実行
+        run: npm run build
 
+      # Step 5: GitHub Pagesにデプロイ
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
+        uses: peaceiris/actions-gh-pages@v4 # 最新の安定バージョンを使用
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist # Viteでビルドされたファイルが出力されるディレクトリ
-          # user_name: 'github-actions[bot]' # コミットするユーザー名 (オプション)
-          # user_email: 'github-actions[bot]@users.noreply.github.com' # コミットするメールアドレス (オプション)
-          # cname: your-custom-domain.com # カスタムドメインを使う場合 (オプション)
+          publish_dir: ./dist # Viteでビルドされたファイルが出力されるディレクトリ (通常は ./dist)
+          # オプション: コミットするユーザー名とメールアドレス (設定しない場合はGitHub Actionsボットが使用される)
+          # user_name: 'Your Name or Bot Name'
+          # user_email: 'your-email@example.com'
+          # オプション: カスタムドメインを使用する場合 (CNAMEファイルがpublish_dirのルートに必要)
+          # cname: your-custom-domain.com
+          # オプション: コミットメッセージ (デフォルトは 'Deploy to GitHub Pages')
+          # commit_message: ${{ github.event.head_commit.message }} # トリガーとなったコミットのメッセージを使用する例
