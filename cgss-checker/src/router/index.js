@@ -1,22 +1,22 @@
-import { createRouter, createWebHistory } from 'vue-router';
-import App from '../App.vue'; // メインのチェッカー画面 (あるいはリスト表示用の新しいコンポーネント)
+import { createRouter, createWebHashHistory } from 'vue-router'; // ← 修正済み
+import App from '../App.vue';
 import StarRankEditor from '../views/StarRankEditor.vue';
 
 const routes = [
   {
     path: '/',
     name: 'CardChecker',
-    component: App // App.vue をそのまま使うか、リスト表示部分を別コンポーネントに切り出す
+    component: App
   },
   {
-    path: '/star-editor', // スターランク編集画面のパス
+    path: '/star-editor',
     name: 'StarRankEditor',
     component: StarRankEditor
   }
 ];
 
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
+  history: createWebHashHistory(import.meta.env.BASE_URL), // ← 修正済み
   routes
 });
 
