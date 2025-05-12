@@ -20,8 +20,8 @@ export default defineConfig({
         theme_color: '#1890ff', // アプリのテーマカラー
         background_color: '#ffffff', // スプラッシュスクリーンの背景色
         display: 'standalone', // アプリのように表示
-        scope: '/',
-        start_url: '/',
+        scope: '/cgss-checker/',
+        start_url: '/cgss-checker/',
         icons: [
           {
             src: 'cgss_checker.png', // public/cgss_checker.png を指す
