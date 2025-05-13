@@ -91,7 +91,7 @@ const filteredCards = computed(() =>
 
 const loadCsv = async () => {
   const filename = csvMap[rarity.value]
-  const url = new URL(`/data/csv/${filename}`, import.meta.env.BASE_URL).href
+  const url = new URL(`/${filename}`, import.meta.env.BASE_URL).href // 修正後のパス
   console.log(`Fetching CSV for ${rarity.value} from ${url}...`)
 
   try {
