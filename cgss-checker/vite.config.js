@@ -5,6 +5,7 @@ import { VitePWA } from 'vite-plugin-pwa' // インポート
 
 export default defineConfig({
   base: '/cgss-checker/', // ★★★ あなたのリポジトリ名に合わせてください ★★★
+  publicDir: 'public', // ← 明示的に必要
   plugins: [
     vue(),
     VitePWA({ // PWAプラグインの設定
