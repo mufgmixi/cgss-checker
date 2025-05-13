@@ -10,10 +10,10 @@ const isLoading = ref(false);
 
 // App.vue と同じマッピングを使用
 const rarityMapping = {
-  'ノーマル': { folder: 'N', csv: '/data/csv/cgss_n_card_list.csv' },
-  'レア':    { folder: 'R', csv: '/data/csv/cgss_r_card_list.csv' },
-  'Sレア':   { folder: 'SR', csv: '/data/csv/cgss_sr_card_list.csv' },
-  'SSレア':  { folder: 'SSR', csv: '/data/csv/cgss_ssr_card_list.csv' }
+  'ノーマル': { folder: 'N', csv: 'data/csv/cgss_n_card_list.csv' },
+  'レア':    { folder: 'R', csv: 'data/csv/cgss_r_card_list.csv' },
+  'Sレア':   { folder: 'SR', csv: 'data/csv/cgss_sr_card_list.csv' },
+  'SSレア':  { folder: 'SSR', csv: 'data/csv/cgss_ssr_card_list.csv' }
 };
 
 const getFilenameFromUrl = (url) => {
