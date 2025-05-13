@@ -1,46 +1,48 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted } from 'vue'
+import Papa from 'papaparse'
 
-const allCards = ref([]);
+const rarities = ['ノーマル', 'レア', 'Sレア', 'SSレア']
+const cardData = ref({})
 
-const rarities = ['ノーマル', 'レア', 'Sレア', 'SSレア'];
-const csvMap = {
-  'ノーマル': 'cgss_n_card_list.csv',
-  'レア': 'cgss_r_card_list.csv',
-  'Sレア': 'cgss_sr_card_list.csv',
-  'SSレア': 'cgss_ssr_card_list.csv'
-};
+const loadCsv = async (rarity) => {
+  const filename = {
+    ノーマル: 'cgss_n_card_list.csv',
+    レア: 'cgss_r_card_list.csv',
+    Sレア: 'cgss_sr_card_list.csv',
+    SSレア: 'cgss_ssr_card_list.csv'
+  }[rarity]
 
-const loadEditorData = async () => {
-  const base = import.meta.env.BASE_URL;
+  const url = new URL(`/data/csv/${filename}`, import.meta.env.BASE_URL).href
+  console.log(`Fetching CSV for editor: ${rarity} from ${url}...`)
 
-  for (const rarity of rarities) {
-    const csvFile = csvMap[rarity];
-    const url = `${base}data/csv/${csvFile}`;
-    console.log(`Fetching CSV for editor: ${rarity} from ${url}...`);
-    try {
-      const res = await fetch(url);
-      const text = await res.text();
-      const lines = text.trim().split('\n');
-      const cards = lines.map(line => line.split(','));
-      allCards.value.push(...cards);
-    } catch (e) {
-      console.warn(`Failed to fetch ${url} for editor: ${e}`);
-    }
+  try {
+    const response = await fetch(url)
+    if (!response.ok) throw new Error(`${response.status}`)
+    const text = await response.text()
+    const result = Papa.parse(text, { header: true })
+    cardData.value[rarity] = result.data
+  } catch (error) {
+    console.error(`Failed to fetch ${url} for editor: ${error.message}`)
+    cardData.value[rarity] = []
   }
-};
+}
 
-onMounted(() => {
-  loadEditorData();
-});
+onMounted(async () => {
+  for (const rarity of rarities) {
+    await loadCsv(rarity)
+  }
+  console.log(`All cards loaded for editing. Total: ${
+    Object.values(cardData.value).reduce((sum, list) => sum + list.length, 0)
+  }`)
+})
 </script>
 
 <template>
   <div>
-    <h2>スターランクエディタ</h2>
-    <p>カード数: {{ allCards.length }}</p>
-    <ul>
-      <li v-for="card in allCards" :key="card[0]">{{ card.join(', ') }}</li>
-    </ul>
+    <h2>スターランク編集</h2>
+    <p v-if="Object.values(cardData).every(list => list.length === 0)">
+      データが読み込めませんでした。
+    </p>
   </div>
 </template>
