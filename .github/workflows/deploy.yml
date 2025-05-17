@@ -1,0 +1,56 @@
+# .github/workflows/deploy.yml
+name: Deploy to GitHub Pages
+
+on:
+  # mainブランチへのpush時にワークフローを実行
+  push:
+    branches:
+      - main # あなたのリポジトリのメインブランチ名に合わせてください (例: master)
+
+  # Actionsタブから手動でワークフローを実行できるようにする
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    # 実行環境として最新のUbuntuを指定
+    runs-on: ubuntu-latest
+
+    # ジョブに与える権限を設定
+    permissions:
+      contents: write # GitHub Pagesへのデプロイや、アクションによるコミットに必要
+
+    steps:
+      # Step 1: リポジトリのコードをチェックアウト
+      - name: Checkout code
+        uses: actions/checkout@v4 # uses でアクションを指定。@v4 はバージョン4
+
+      # Step 2: Node.js環境をセットアップ
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18' # プロジェクトで使用しているNode.jsのバージョンに合わせてください
+                           # 例: '18.x', '20.x' など。LTS版を推奨。
+          cache: 'npm' # npmの依存関係のキャッシュを有効にする
+
+      # Step 3: 依存関係をインストール
+      # package-lock.json が存在する場合、npm ci を使うとより再現性の高いビルドになります。
+      - name: Install dependencies
+        run: npm ci
+
+      # Step 4: プロジェクトをビルド
+      # package.json の "build" スクリプトが `vite build` を実行することを想定しています。
+      - name: Build project
+        run: npm run build
+
+      # Step 5: GitHub Pagesにデプロイ
+      # peaceiris/actions-gh-pages アクションを使用します。
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }} # リポジトリへの書き込み権限を持つトークン (自動で提供される)
+          publish_dir: ./dist # Viteでビルドされたファイルが出力されるディレクトリ (通常は ./dist)
+          # publish_branch: gh-pages # デプロイ先のブランチ名 (デフォルトは gh-pages)
+          # user_name: 'github-actions[bot]' # コミットするユーザー名 (オプション)
+          # user_email: 'github-actions[bot]@users.noreply.github.com' # コミットするメールアドレス (オプション)
+          # commit_message: 'Deploy to GitHub Pages' # コミットメッセージ (オプション)
+          # cname: your-custom-domain.com # カスタムドメインを使用する場合 (オプション)
