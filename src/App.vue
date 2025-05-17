@@ -2,14 +2,14 @@
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import Papa from 'papaparse';
 import CardItem from './components/CardItem.vue';
-import StarRankEditor from './views/StarRankEditor.vue'; // StarRankEditorをインポート
+import StarRankEditor from './views/StarRankEditor.vue';
 
 // --- データと状態管理 ---
 const allCardsRaw = ref({});
 const selectedRarity = ref('SSレア');
-const ownedCards = ref({}); // { "カードID": スターランク数 }
+const ownedCards = ref({});
 const isLoading = ref(false);
-const isEditingStarRank = ref(false); // スターランク編集画面の表示状態
+const isEditingStarRank = ref(false);
 
 const rarityMapping = {
   'ノーマル': { folder: 'N', csv: 'cgss_n_card_list.csv' },
@@ -20,10 +20,9 @@ const rarityMapping = {
 
 const searchTerm = ref('');
 const selectedAttribute = ref('All');
-const showOwned = ref('All'); // "All", "Owned", "NotOwned"
+const showOwned = ref('All');
 const selectedFilterCategory = ref('All');
 
-// --- トップに戻るボタン用の状態とロジック ---
 const showScrollToTopButton = ref(false);
 const scrollThreshold = 200;
 
@@ -35,7 +34,6 @@ const scrollToTop = () => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
-// --- 全チェッククリア用のメソッド ---
 const clearAllOwnedChecks = () => {
   if (confirm('本当に全てのカードの所持情報（スターランク含む）をクリアしますか？この操作は元に戻せません。')) {
     ownedCards.value = {};
@@ -44,17 +42,15 @@ const clearAllOwnedChecks = () => {
   }
 };
 
-// --- スターランク編集画面遷移用メソッド ---
 const goToStarRankEditor = () => {
   isEditingStarRank.value = true;
 };
 
 const handleBackFromEditor = () => {
   isEditingStarRank.value = false;
-  loadOwnedDataFromLocalStorage(); // エディタでの変更を反映するために再読み込み
+  loadOwnedDataFromLocalStorage();
   console.log('Returned from star rank editor. Reloading owned data.');
 };
-
 
 async function loadCsvData(rarityKey) {
   const targetRarityInfo = rarityMapping[rarityKey];
@@ -62,8 +58,24 @@ async function loadCsvData(rarityKey) {
     console.error(`CSV file mapping not found for rarity: ${rarityKey}`);
     return [];
   }
-  const filePath = `/data/csv/${targetRarityInfo.csv}`;
-  // isLoading.value = true; // loadCardsForCurrentRarity で制御
+
+  // ▼▼▼ URLの構築方法を修正 ▼▼▼
+  const baseUrl = import.meta.env.BASE_URL; // ビルド設定からベースURLを取得
+  const csvPath = `data/csv/${targetRarityInfo.csv}`; // public内のパス (先頭の/は不要)
+  // baseUrlが '/' で終わっていない場合、かつ csvPath が '/' で始まっていない場合に / を挟む
+  let filePath = baseUrl.endsWith('/') ? baseUrl + csvPath : `${baseUrl}/${csvPath}`;
+  // もし baseUrl が空文字列（ローカル開発時でbaseが'/'の場合など）で、filePathが '//' で始まるのを防ぐ
+  if (baseUrl === '/' && filePath.startsWith('//')) {
+    filePath = filePath.substring(1);
+  } else if (baseUrl !== '/' && !filePath.startsWith(baseUrl)) {
+    // デプロイ時、baseUrlが正しく付与されていない場合（稀なケースのフォールバック）
+    // 通常は import.meta.env.BASE_URL が正しく設定されていれば不要
+    if (!baseUrl.endsWith('/')) filePath = `/${filePath}`;
+    filePath = `${baseUrl}${filePath}`;
+  }
+  // ▲▲▲ URLの構築方法を修正 ▲▲▲
+
+  isLoading.value = true;
   console.log(`Fetching CSV for ${rarityKey} from ${filePath}...`);
 
   try {
@@ -92,6 +104,14 @@ async function loadCsvData(rarityKey) {
               const cardId = String(card.id).trim();
               let cardNameForFile = String(card.name).trim().replace(/[\\/:*?"<>|#]/g, '_');
               const filename = `${cardId}_${cardNameForFile}.jpg`;
+              // 画像パスも同様にBASE_URLを考慮する必要があるかもしれないが、通常はpublicからの絶対パスで解決される
+              const imageBase = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
+              let localImageUrl = `${imageBase}data/images/${currentRarityFolder}/${filename}`;
+              if (imageBase === '/' && localImageUrl.startsWith('//')) {
+                localImageUrl = localImageUrl.substring(1);
+              }
+
+
               return {
                 id: cardId,
                 name: String(card.name).trim(),
@@ -101,7 +121,7 @@ async function loadCsvData(rarityKey) {
                 attribute: String(card.attribute || 'Unknown').trim(),
                 availability: String(card.availability || '').trim(),
                 filter_category: String(card.filter_category || 'その他').trim(),
-                local_image_url: `/data/images/${currentRarityFolder}/${filename}`,
+                local_image_url: localImageUrl,
               };
             });
           console.log(`Processed data for ${rarityKey} (first 1 item):`, processedData.slice(0, 1));
@@ -328,205 +348,34 @@ watch(selectedRarity, async (newRarity, oldRarity) => {
 body {
   margin: 0;
   font-family: 'M PLUS Rounded 1c', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-  background-color: #0a0f1f; /* 全体の背景を暗く */
-  color: #e0e0e0;       /* 基本の文字色を明るく */
+  background-color: #0a0f1f;
+  color: #e0e0e0;
   line-height: 1.6;
-  padding-top: 130px; /* 固定ヘッダーの高さ (要調整) */
+  padding-top: 130px;
 }
-
-#app-container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 20px;
-}
-
-.app-header {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  background: linear-gradient(135deg, #3c006b 0%, #002c5f 100%); /* よりダークなグラデーション */
-  color: white;
-  padding: 12px 20px;
-  box-shadow: 0 3px 8px rgba(0,0,0,0.25); /* 影を少し濃く */
-  z-index: 1000;
-  box-sizing: border-box;
-}
-.app-header h1 {
-  text-align: center;
-  margin: 0 0 10px 0;
-  font-size: 2em;
-  font-weight: 700;
-  color: #00f0ff; /* タイトルをネオンシアンに */
-  text-shadow: 0 0 5px #00f0ff, 0 0 10px rgba(0, 240, 255, 0.7);
-}
-.stats-bar {
-  text-align: center;
-  font-size: 0.9em;
-  background-color: rgba(10, 15, 31, 0.7); /* ヘッダー背景に合わせて少し暗く */
-  padding: 10px;
-  border-radius: 6px;
-  margin-top: 8px;
-  color: #c7d2fe; /* 明るめの文字色 */
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 15px;
-  border-top: 1px solid #303850; /* 区切り線 */
-}
-.stats-bar p {
-  margin: 0;
-}
-
-.main-content {
-  /* 特に変更なし */
-}
-
-.controls, .filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 15px;
-  margin-bottom: 20px;
-  padding: 16px;
-  background-color: rgba(27, 34, 59, 0.85); /* フィルターエリアの背景も暗めに */
-  border-radius: 8px;
-  border: 1px solid #4a5578; /* アクセントライン */
-  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-}
-
-.control-group, .filter-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-label {
-  font-weight: 500;
-  color: #00f0ff; /* ラベル文字色をネオンシアンに */
-  font-size: 0.9em;
-}
-
-/* ▼▼▼ select と input のスタイルをサイバーパンク風に修正 ▼▼▼ */
-select, .filter-input {
-  padding: 10px 14px;
-  border-radius: 4px;
-  border: 1px solid #4a5578;
-  background-color: #111827; /* 暗い入力背景 */
-  color: #c7d2fe; /* 明るい入力文字色 */
-  font-size: 0.95em;
-  flex-grow: 1;
-  min-width: 150px;
-  box-sizing: border-box;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300f0ff'%3E%3Cpath d='M7 10l5 5 5-5H7z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  background-size: 1.2em;
-}
-.filter-input::placeholder {
-  color: #808a9f;
-}
-
-select option {
-  background-color: #111827; /* オプションの背景色 */
-  color: #e0e0e0;       /* オプションの文字色 */
-}
-
-select:focus, .filter-input:focus {
-  border-color: #00f0ff; /* シアンでフォーカス */
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.3), 0 0 10px rgba(0, 240, 255, 0.2);
-}
-/* ▲▲▲ select と input のスタイルをサイバーパンク風に修正 ▲▲▲ */
-
-
-button {
-  padding: 9px 15px;
-  border: 1px solid transparent; /* 初期ボーダーを透明に */
-  border-radius: 6px;
-  font-size: 0.9em;
-  font-weight: 600; /* 少し太く */
-  cursor: pointer;
-  transition: background-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-button:hover {
-  transform: translateY(-1px) scale(1.02);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-}
-button:active {
-  transform: translateY(0px) scale(1);
-  box-shadow: inset 0 1px 3px rgba(0,0,0,0.2);
-}
-
-.clear-all-button {
-  background-color: #e74c3c; /* 赤系 */
-  color: white;
-  border-color: #c0392b;
-}
-.clear-all-button:hover {
-  background-color: #c0392b;
-  border-color: #a5281b;
-}
-
-.edit-star-rank-button {
-  background-color: #ff00ff; /* マゼンタ */
-  color: #0a0f1f;
-  border-color: #cc00cc;
-}
-.edit-star-rank-button:hover {
-  background-color: #e600e6;
-  border-color: #b300b3;
-}
-
-.loading-indicator, .no-cards {
-  text-align: center;
-  padding: 40px 20px;
-  font-size: 1.1em;
-  color: #9ca3af; /* 少し明るいグレー */
-  background-color: rgba(27, 34, 59, 0.8); /* 半透明の暗い背景 */
-  border-radius: 8px;
-  margin-top: 24px;
-  border: 1px solid #4a5578;
-}
-.no-cards p {
-  margin: 8px 0;
-}
-
-.card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-  gap: 20px;
-}
-
-.scroll-to-top-button {
-  position: fixed;
-  bottom: 30px;
-  right: 30px;
-  padding: 0;
-  width: 50px;
-  height: 50px;
-  background-color: #00f0ff; /* シアン */
-  color: #0a0f1f; /* 暗い文字色 */
-  border: none;
-  border-radius: 50%;
-  cursor: pointer;
-  box-shadow: 0 0 15px rgba(0, 240, 255, 0.5), 0 0 25px rgba(0, 240, 255, 0.3); /* グロー強め */
-  z-index: 1001;
-  opacity: 0.9;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.3em;
-  text-shadow: none;
-}
-.scroll-to-top-button:hover {
-  opacity: 1;
-  transform: scale(1.15);
-  box-shadow: 0 0 25px rgba(0, 240, 255, 0.7), 0 0 35px rgba(0, 240, 255, 0.5);
-}
+#app-container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+.app-header { position: fixed; top: 0; left: 0; width: 100%; background: linear-gradient(135deg, #3c006b 0%, #002c5f 100%); color: white; padding: 12px 20px; box-shadow: 0 3px 8px rgba(0,0,0,0.25); z-index: 1000; box-sizing: border-box; }
+.app-header h1 { text-align: center; margin: 0 0 10px 0; font-size: 2em; font-weight: 700; color: #00f0ff; text-shadow: 0 0 5px #00f0ff, 0 0 10px rgba(0, 240, 255, 0.7); }
+.stats-bar { text-align: center; font-size: 0.9em; background-color: rgba(10, 15, 31, 0.7); padding: 10px; border-radius: 6px; margin-top: 8px; color: #c7d2fe; display: flex; justify-content: center; align-items: center; gap: 15px; border-top: 1px solid #303850; }
+.stats-bar p { margin: 0; }
+.main-content {}
+.controls, .filters { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; padding: 16px; background-color: rgba(27, 34, 59, 0.85); border-radius: 8px; border: 1px solid #4a5578; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+.control-group, .filter-group { display: flex; align-items: center; gap: 8px; }
+label { font-weight: 500; color: #00f0ff; font-size: 0.9em; }
+select, .filter-input { padding: 10px 14px; border-radius: 4px; border: 1px solid #4a5578; background-color: #111827; color: #c7d2fe; font-size: 0.95em; flex-grow: 1; min-width: 150px; box-sizing: border-box; transition: border-color 0.2s ease, box-shadow 0.2s ease; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300f0ff'%3E%3Cpath d='M7 10l5 5 5-5H7z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; background-size: 1.2em; }
+.filter-input::placeholder { color: #808a9f; }
+select option { background-color: #111827; color: #e0e0e0; }
+select:focus, .filter-input:focus { border-color: #00f0ff; outline: none; box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.3), 0 0 10px rgba(0, 240, 255, 0.2); }
+button { padding: 9px 15px; border: 1px solid transparent; border-radius: 6px; font-size: 0.9em; font-weight: 600; cursor: pointer; transition: background-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease, border-color 0.2s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.2); text-transform: uppercase; letter-spacing: 0.5px; }
+button:hover { transform: translateY(-1px) scale(1.02); box-shadow: 0 4px 8px rgba(0,0,0,0.3); }
+button:active { transform: translateY(0px) scale(1); box-shadow: inset 0 1px 3px rgba(0,0,0,0.2); }
+.clear-all-button { background-color: #e74c3c; color: white; border-color: #c0392b;}
+.clear-all-button:hover { background-color: #c0392b; border-color: #a5281b;}
+.edit-star-rank-button { background-color: #ff00ff; color: #0a0f1f; border-color: #cc00cc;}
+.edit-star-rank-button:hover { background-color: #e600e6; border-color: #b300b3;}
+.loading-indicator, .no-cards { text-align: center; padding: 40px 20px; font-size: 1.1em; color: #9ca3af; background-color: rgba(27, 34, 59, 0.8); border-radius: 8px; margin-top: 24px; border: 1px solid #4a5578;}
+.no-cards p { margin: 8px 0; }
+.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 20px; }
+.scroll-to-top-button { position: fixed; bottom: 30px; right: 30px; padding: 0; width: 50px; height: 50px; background-color: #00f0ff; color: #0a0f1f; border: none; border-radius: 50%; cursor: pointer; box-shadow: 0 0 15px rgba(0, 240, 255, 0.5), 0 0 25px rgba(0, 240, 255, 0.3); z-index: 1001; opacity: 0.9; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; font-size: 1.3em; text-shadow: none; }
+.scroll-to-top-button:hover { opacity: 1; transform: scale(1.15); box-shadow: 0 0 25px rgba(0, 240, 255, 0.7), 0 0 35px rgba(0, 240, 255, 0.5); }
 </style>
