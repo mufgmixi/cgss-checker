@@ -10,25 +10,17 @@ const isLoading = ref(false);
 
 // App.vue と同じマッピングを使用
 const rarityMapping = {
-  'ノーマル': { folder: 'N', csv: 'cgss_n_card_list.csv' }, // ファイル名のみ
+  'ノーマル': { folder: 'N', csv: 'cgss_n_card_list.csv' },
   'レア':    { folder: 'R', csv: 'cgss_r_card_list.csv' },
   'Sレア':   { folder: 'SR', csv: 'cgss_sr_card_list.csv' },
   'SSレア':  { folder: 'SSR', csv: 'cgss_ssr_card_list.csv' }
 };
 
-// getFilenameFromUrl は現状このファイルでは直接使用されていませんが、
-// processedData の中で image_url からファイル名を取得する際に間接的に使われる想定でした。
-// 今回は processedData の中で直接ファイル名を構築しています。
-// const getFilenameFromUrl = (url) => {
-//   if (!url || typeof url !== 'string') return 'default_image.png';
-//   const parts = url.split('/');
-//   return parts[parts.length - 1];
-// };
-
 async function loadAllCsvData() {
   isLoading.value = true;
   const loadedCards = [];
   const rarityKeys = Object.keys(rarityMapping);
+  const baseUrl = import.meta.env.BASE_URL; // ベースURLをここで一度取得
 
   for (const rarityKey of rarityKeys) {
     const targetRarityInfo = rarityMapping[rarityKey];
@@ -36,7 +28,15 @@ async function loadAllCsvData() {
       console.error(`[Editor] CSV file mapping not found for rarity: ${rarityKey}`);
       continue;
     }
-    const filePath = `/data/csv/${targetRarityInfo.csv}`; // publicフォルダからの正しいパス
+
+    const csvPath = `data/csv/${targetRarityInfo.csv}`;
+    // ベースURLの末尾が '/' かどうかで結合方法を調整
+    let filePath = baseUrl.endsWith('/') ? `${baseUrl}${csvPath}` : `${baseUrl}/${csvPath}`;
+    // ローカル開発時などでbaseUrlが単に'/'の場合、filePathが'//data/...'になるのを防ぐ
+    if (filePath.startsWith('//')) {
+      filePath = filePath.substring(1);
+    }
+
     console.log(`[Editor] Fetching CSV for ${rarityKey} from ${filePath}...`);
 
     try {
@@ -66,15 +66,20 @@ async function loadAllCsvData() {
         .filter(card => card && typeof card.id === 'string' && card.id.trim() !== '' && typeof card.name === 'string' && card.name.trim() !== '')
         .map(card => {
             const cardRarityTrimmed = String(card.rarity || '').trim();
-            // rarityMapping からフォルダ名を取得。見つからなければデフォルト値
             const currentRarityFolder = rarityMapping[cardRarityTrimmed] ? rarityMapping[cardRarityTrimmed].folder : 'unknown';
             if (!rarityMapping[cardRarityTrimmed]) {
-                console.warn(`[Editor] No rarityMapping folder found for card rarity: '${cardRarityTrimmed}' ID ${card.id}, using 'unknown' folder.`);
+                console.warn(`[Editor] No rarityMapping folder for card rarity: '${cardRarityTrimmed}' ID ${card.id}, using 'unknown' folder.`);
             }
 
             const cardId = String(card.id).trim();
             let cardNameForFile = String(card.name).trim().replace(/[\\/:*?"<>|#]/g, '_');
             const filename = `${cardId}_${cardNameForFile}.jpg`;
+
+            const imagePath = `data/images/${currentRarityFolder}/${filename}`;
+            let localImageUrl = baseUrl.endsWith('/') ? `${baseUrl}${imagePath}` : `${baseUrl}/${imagePath}`;
+            if (localImageUrl.startsWith('//')) {
+                localImageUrl = localImageUrl.substring(1);
+            }
 
             return {
                 id: cardId,
@@ -83,7 +88,7 @@ async function loadAllCsvData() {
                 attribute: String(card.attribute || 'Unknown').trim(),
                 availability: String(card.availability || '').trim(),
                 filter_category: String(card.filter_category || 'その他').trim(),
-                local_image_url: `/data/images/${currentRarityFolder}/${filename}`,
+                local_image_url: localImageUrl,
             };
         });
       console.log(`[Editor] Processed data for ${rarityKey} (length: ${processedData.length}):`, processedData.slice(0,1));
@@ -95,7 +100,7 @@ async function loadAllCsvData() {
   allCardsForEditing.value = loadedCards.sort((a,b) => parseInt(a.id, 10) - parseInt(b.id, 10));
   isLoading.value = false;
   console.log('[Editor] All cards loaded for editing. Total:', allCardsForEditing.value.length);
-  if (allCardsForEditing.value.length === 0 && !isLoading.value) { // isLoadingも考慮
+  if (allCardsForEditing.value.length === 0 && !isLoading.value) {
       console.warn('[Editor] No cards were loaded into allCardsForEditing. Check CSV paths, content, and console logs.');
   }
 }
@@ -242,15 +247,15 @@ onMounted(async () => {
 <style scoped>
 .editor-container-flat {
   padding: 24px;
-  max-width: 1200px; /* 幅を調整 */
+  max-width: 1200px;
   margin: 30px auto;
-  background-color: #0a0f1f; /* サイバーパンク風ベース */
+  background-color: #0a0f1f;
   color: #e0e0e0;
   border-radius: 8px;
   border: 1px solid #303850;
   box-shadow: 0 0 25px rgba(0, 255, 255, 0.15),
               0 0 15px rgba(255, 0, 255, 0.1);
-  font-family: 'Orbitron', 'Share Tech Mono', monospace, sans-serif; /* サイバーパンク風フォント候補 */
+  font-family: 'Orbitron', 'Share Tech Mono', monospace, sans-serif;
 }
 
 .editor-header-flat {
@@ -401,8 +406,7 @@ onMounted(async () => {
 }
 .editor-star-selector-flat label {
   font-size: 0.95em;
-  /* color: #00f0ff; */ /* 元のシアンから変更 */
-  color: #f0ff00; /* ★★★ 蛍光イエローに変更 ★★★ */
+  color: #f0ff00; /* 蛍光イエロー */
   text-shadow: 0 0 3px #f0ff00, 0 0 6px rgba(240, 255, 0, 0.7); /* イエローのグロー */
   white-space: nowrap;
   font-weight: 500;
@@ -413,8 +417,7 @@ onMounted(async () => {
   border: 1px solid #4a5578;
   font-size: 0.95em;
   background-color: #0a0c1a;
-  /* color: #00f0ff; */ /* 元のシアンから変更 */
-  color: #f0ff00; /* ★★★ 蛍光イエローに変更 ★★★ */
+  color: #f0ff00; /* 蛍光イエロー */
   flex-grow: 1;
   cursor: pointer;
   appearance: none;
@@ -422,11 +425,11 @@ onMounted(async () => {
   background-repeat: no-repeat;
   background-position: right 10px center;
   background-size: 1.2em;
-  text-shadow: 0 0 2px #f0ff00; /* ドロップダウン内の文字にも少しグロー */
+  text-shadow: 0 0 2px #f0ff00;
 }
 .editor-star-selector-flat select option {
   background-color: #111827;
-  color: #e0e0e0; /* ドロップダウンリスト内の文字色は白っぽいままの方が見やすいかも */
+  color: #e0e0e0;
 }
 .editor-star-selector-flat select:focus {
   border-color: #ff00ff;
