@@ -378,4 +378,76 @@ button:active { transform: translateY(0px) scale(1); box-shadow: inset 0 1px 3px
 .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 20px; }
 .scroll-to-top-button { position: fixed; bottom: 30px; right: 30px; padding: 0; width: 50px; height: 50px; background-color: #00f0ff; color: #0a0f1f; border: none; border-radius: 50%; cursor: pointer; box-shadow: 0 0 15px rgba(0, 240, 255, 0.5), 0 0 25px rgba(0, 240, 255, 0.3); z-index: 1001; opacity: 0.9; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; font-size: 1.3em; text-shadow: none; }
 .scroll-to-top-button:hover { opacity: 1; transform: scale(1.15); box-shadow: 0 0 25px rgba(0, 240, 255, 0.7), 0 0 35px rgba(0, 240, 255, 0.5); }
+
+/* ... (既存のPC向けスタイルはそのまま) ... */
+
+/* ▼▼▼ スマホなどの狭い画面向けのスタイル (例: 画面幅が768px以下の場合) ▼▼▼ */
+@media (max-width: 768px) {
+  body {
+    padding-top: 100px; /* ヘッダーの高さに合わせて調整 */
+  }
+
+  #app-container {
+    padding: 10px; /* 全体のパディングを少し狭く */
+  }
+
+  .app-header h1 {
+    font-size: 1.5em; /* タイトルを少し小さく */
+    margin-bottom: 8px;
+  }
+  .stats-bar {
+    font-size: 0.8em; /* 統計情報を少し小さく */
+    flex-direction: column; /* 統計情報を縦並びに */
+    gap: 5px;
+    padding: 8px;
+  }
+  .stats-bar p {
+    /* 必要であれば個別のマージン調整 */
+  }
+  .edit-star-rank-button {
+    font-size: 0.85em;
+    padding: 6px 10px;
+    margin-top: 5px;
+  }
+
+  .controls, .filters {
+    gap: 10px; /* 要素間の隙間を少し狭く */
+    padding: 10px;
+  }
+  .filter-input-flat, .filter-select-flat, /* StarRankEditorのクラス名に合わせて調整 */
+  select, .filter-input { /* App.vue のフィルター */
+    min-width: 100%; /* 狭い画面では各フィルターを横幅いっぱいに */
+    flex-grow: 0; /* 均等に広がるのを防ぐ */
+  }
+  .control-group { /* 全チェッククリアボタンのコンテナ */
+    width: 100%;
+  }
+  .clear-all-button {
+    width: 100%; /* ボタンも横幅いっぱいにするなど */
+  }
+
+  .card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); /* スマホではカードを少し小さめに */
+    gap: 10px;
+  }
+
+  .scroll-to-top-button {
+    bottom: 20px;
+    right: 20px;
+    width: 45px;
+    height: 45px;
+    font-size: 1.1em;
+  }
+}
+
+/* さらに狭い画面向け (例: 480px以下) の調整も必要に応じて追加 */
+@media (max-width: 480px) {
+  .app-header h1 {
+    font-size: 1.3em;
+  }
+  .card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); /* さらに小さく */
+  }
+  /* 必要に応じてフォントサイズなどをさらに調整 */
+}
 </style>

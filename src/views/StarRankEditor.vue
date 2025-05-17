@@ -436,4 +436,53 @@ onMounted(async () => {
   outline: none;
   box-shadow: 0 0 0 3px rgba(255, 0, 255, 0.3), 0 0 10px rgba(255, 0, 255, 0.2);
 }
+/* ▼▼▼ スマホなどの狭い画面向けのスタイル ▼▼▼ */
+@media (max-width: 768px) {
+  .editor-container-flat {
+    padding: 15px;
+  }
+  .editor-header-flat h2 {
+    font-size: 1.5em;
+  }
+  .back-button-flat {
+    padding: 8px 15px;
+    font-size: 0.85em;
+  }
+  .editor-filters-flat {
+    gap: 10px;
+    padding: 12px;
+  }
+  .filter-input-flat, .filter-select-flat {
+    min-width: 100%; /* 狭い画面では各フィルターを横幅いっぱいに */
+    flex-grow: 0;
+  }
+
+  .editor-card-grid-flat {
+    grid-template-columns: 1fr; /* スマホでは1列表示 */
+    gap: 15px;
+  }
+  .editor-card-item-flat {
+    padding: 12px;
+    /* 必要であれば画像と情報の配置を縦並びに変更 */
+    /* flex-direction: column;
+    align-items: flex-start; */
+  }
+  .editor-card-image-flat {
+    width: 60px; /* 画像を少し小さく */
+    /* height: auto; */ /* 縦並びにするなら */
+    margin-right: 12px;
+    /* margin-bottom: 10px; */ /* 縦並びにするなら */
+  }
+  .editor-card-name-flat {
+    font-size: 1.1em;
+  }
+  .editor-card-details-flat {
+    font-size: 0.8em;
+    /* 必要であれば | 区切りをやめて改行表示なども検討 */
+  }
+  .editor-star-selector-flat label,
+  .editor-star-selector-flat select {
+    font-size: 0.9em;
+  }
+}
 </style>

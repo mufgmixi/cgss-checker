@@ -160,4 +160,46 @@ const onImageError = (event) => {
   font-size: 0.9em; /* こちらは元のサイズのままか、少し大きくするか検討 */
   margin: 0;
 }
+/* ▼▼▼ スマホなどの狭い画面向けのスタイル ▼▼▼ */
+@media (max-width: 768px) {
+  .card-item {
+    padding: 8px; /* パディングを少し狭く */
+    border-radius: 10px; /* 角丸は維持または少し小さく */
+  }
+  .card-image {
+    max-width: 100px; /* 画像サイズを少し小さく */
+    max-height: 150px;
+    margin-bottom: 8px;
+  }
+  .card-name {
+    font-size: 0.9em;
+    min-height: 2.2em; /* 行数に応じて調整 */
+  }
+  .card-attribute, .card-rarity {
+    font-size: 0.75em;
+  }
+  .star-rank-container {
+    /* height はバッジサイズに依存するので、バッジサイズが変われば調整 */
+  }
+  .star-rank-badge {
+    /* 必要であればバッジサイズも調整 */
+    /* width: 25px;
+    height: 25px;
+    font-size: 0.8em; */
+  }
+  .not-owned-text {
+    font-size: 0.85em;
+  }
+}
+
+@media (max-width: 480px) {
+  .card-image {
+    max-width: 80px;
+    max-height: 120px;
+  }
+  .card-name {
+    font-size: 0.85em;
+  }
+  /* ... */
+}
 </style>
