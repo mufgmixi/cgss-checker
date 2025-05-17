@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/cgss-checker/sw.js', { scope: '/cgss-checker/' })})}
