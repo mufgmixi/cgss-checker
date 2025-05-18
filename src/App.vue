@@ -4,7 +4,6 @@ import Papa from 'papaparse';
 import CardItem from './components/CardItem.vue';
 import StarRankEditor from './views/StarRankEditor.vue';
 
-// --- データと状態管理 ---
 const allCardsRaw = ref({});
 const selectedRarity = ref('SSレア');
 const ownedCards = ref({});
@@ -22,60 +21,42 @@ const searchTerm = ref('');
 const selectedAttribute = ref('All');
 const showOwned = ref('All');
 const selectedFilterCategory = ref('All');
-const sortOrder = ref('asc'); // 'asc' or 'desc' for App.vue card list
+const sortOrder = ref('asc');
 
-// --- トップに戻るボタン用の状態とロジック ---
 const showScrollToTopButton = ref(false);
 const scrollThreshold = 200;
 
 const handleScroll = () => {
   showScrollToTopButton.value = window.scrollY > scrollThreshold;
 };
-
 const scrollToTop = () => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 };
-
-// --- 全チェッククリア用のメソッド ---
 const clearAllOwnedChecks = () => {
   if (confirm('本当に全てのカードの所持情報（スターランク含む）をクリアしますか？この操作は元に戻せません。')) {
     ownedCards.value = {};
     saveOwnedDataToLocalStorage();
-    console.log('All owned checks and star ranks cleared.');
   }
 };
-
-// --- スターランク編集画面遷移用メソッド ---
 const goToStarRankEditor = () => {
   isEditingStarRank.value = true;
 };
-
 const handleBackFromEditor = () => {
   isEditingStarRank.value = false;
   loadOwnedDataFromLocalStorage();
-  console.log('Returned from star rank editor. Reloading owned data.');
 };
 
 async function loadCsvData(rarityKey) {
   const targetRarityInfo = rarityMapping[rarityKey];
-  if (!targetRarityInfo || !targetRarityInfo.csv) {
-    console.error(`CSV file mapping not found for rarity: ${rarityKey}`);
-    return [];
-  }
+  if (!targetRarityInfo || !targetRarityInfo.csv) return [];
   const baseUrl = import.meta.env.BASE_URL;
   const csvPath = `data/csv/${targetRarityInfo.csv}`;
   let filePath = baseUrl.endsWith('/') ? `${baseUrl}${csvPath}` : `${baseUrl}/${csvPath}`;
-  if (filePath.startsWith('//')) { // baseUrlが '/' の場合の重複スラッシュを修正
-    filePath = filePath.substring(1);
-  }
+  if (filePath.startsWith('//')) filePath = filePath.substring(1);
   isLoading.value = true;
-  console.log(`Fetching CSV for ${rarityKey} from ${filePath}...`);
   try {
     const response = await fetch(filePath);
-    if (!response.ok) {
-      console.error(`Failed to fetch ${filePath}: ${response.status} ${response.statusText}`);
-      return [];
-    }
+    if (!response.ok) return [];
     const csvText = await response.text();
     return new Promise((resolve, reject) => {
       Papa.parse(csvText, {
@@ -92,9 +73,7 @@ async function loadCsvData(rarityKey) {
               const filename = `${cardId}_${cardNameForFile}.jpg`;
               const imageBase = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
               let localImageUrl = `${imageBase}data/images/${currentRarityFolder}/${filename}`;
-              if (localImageUrl.startsWith('//')) { // baseUrlが '/' の場合の重複スラッシュを修正
-                localImageUrl = localImageUrl.substring(1);
-              }
+              if (localImageUrl.startsWith('//')) localImageUrl = localImageUrl.substring(1);
               return {
                 id: cardId, name: String(card.name).trim(), rarity: cardRarityTrimmed,
                 image_url: String(card.image_url || '').trim(), detail_url: String(card.detail_url || '').trim(),
@@ -107,14 +86,11 @@ async function loadCsvData(rarityKey) {
         error: (error) => reject(error)
       });
     });
-  } catch (error) {
-    console.error(`Error in loadCsvData for ${rarityKey}:`, error);
-    return [];
-  }
+  } catch (error) { return []; } finally { isLoading.value = false; } // isLoading の制御を修正
 }
 
 async function loadCardsForCurrentRarity() {
-  isLoading.value = true;
+  // isLoading の制御は loadCsvData に任せるのでここでは直接操作しない
   const currentRarityKey = selectedRarity.value;
   if (currentRarityKey && rarityMapping[currentRarityKey]) {
     if (!allCardsRaw.value[currentRarityKey] || allCardsRaw.value[currentRarityKey].length === 0) {
@@ -123,18 +99,15 @@ async function loadCardsForCurrentRarity() {
   } else {
     if(currentRarityKey) allCardsRaw.value[currentRarityKey] = [];
   }
-  isLoading.value = false;
 }
 
 function loadOwnedDataFromLocalStorage() {
   const data = localStorage.getItem('cgssOwnedCards');
   if (data) { try { ownedCards.value = JSON.parse(data); } catch (e) { ownedCards.value = {}; } }
 }
-
 function saveOwnedDataToLocalStorage() {
   try { localStorage.setItem('cgssOwnedCards', JSON.stringify(ownedCards.value)); } catch (e) { console.error(e); }
 }
-
 function handleToggleStarRankBasic({ cardId }) {
   const cardIdStr = String(cardId);
   const currentStar = ownedCards.value[cardIdStr] || 0;
@@ -143,7 +116,6 @@ function handleToggleStarRankBasic({ cardId }) {
   else { delete ownedCards.value[cardIdStr]; }
   saveOwnedDataToLocalStorage();
 }
-
 const toggleSortOrder = () => {
   sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc';
 };
@@ -151,45 +123,29 @@ const toggleSortOrder = () => {
 const cardsForSelectedRarity = computed(() => {
   const rawData = allCardsRaw.value[selectedRarity.value];
   if (!Array.isArray(rawData)) return [];
-  return rawData.map(card => ({
-    ...card,
-    starRank: ownedCards.value[String(card.id)] || 0
-  }));
+  return rawData.map(card => ({ ...card, starRank: ownedCards.value[String(card.id)] || 0 }));
 });
-
 const ownedCountForSelectedRarity = computed(() => {
   const currentCards = cardsForSelectedRarity.value;
   if (!Array.isArray(currentCards)) return 0;
   return currentCards.filter(card => card.starRank > 0).length;
 });
-
 const totalCountForSelectedRarity = computed(() => {
   const currentCards = cardsForSelectedRarity.value;
   if (!Array.isArray(currentCards)) return 0;
   return currentCards.length;
 });
-
 const ownedPercentageForSelectedRarity = computed(() => {
   if (totalCountForSelectedRarity.value === 0) return 0;
   return Math.round((ownedCountForSelectedRarity.value / totalCountForSelectedRarity.value) * 100);
 });
-
 const filterCategoryOptions = computed(() => {
   const categories = new Set(['All']);
   if (Array.isArray(cardsForSelectedRarity.value)) {
-    cardsForSelectedRarity.value.forEach(card => {
-      if (card.filter_category) categories.add(card.filter_category);
-    });
+    cardsForSelectedRarity.value.forEach(card => { if (card.filter_category) categories.add(card.filter_category); });
   }
-  return Array.from(categories).sort((a,b) => {
-    if (a === 'All') return -1; if (b === 'All') return 1;
-    const order = ['恒常', '期間限定ガシャ', 'フェス限定', 'ドミナント限定', 'イベント報酬', 'イベント報酬(コラボ)'];
-    const iA = order.indexOf(a), iB = order.indexOf(b);
-    if (iA !== -1 && iB !== -1) return iA - iB; if (iA !== -1) return -1; if (iB !== -1) return 1;
-    return a.localeCompare(b);
-  });
+  return Array.from(categories).sort((a,b) => { if (a === 'All') return -1; if (b === 'All') return 1; const o = ['恒常', '期間限定ガシャ', 'フェス限定', 'ドミナント限定', 'イベント報酬', 'イベント報酬(コラボ)']; const iA = o.indexOf(a), iB = o.indexOf(b); if (iA!==-1&&iB!==-1) return iA-iB; if (iA!==-1) return -1; if (iB!==-1) return 1; return a.localeCompare(b); });
 });
-
 const filteredCards = computed(() => {
   let cardsToFilter = cardsForSelectedRarity.value;
   if (!Array.isArray(cardsToFilter)) return [];
@@ -203,43 +159,30 @@ const filteredCards = computed(() => {
     else if (showOwned.value === 'NotOwned') ownedMatch = card.starRank === 0;
     return nameMatch && attributeMatch && categoryMatch && ownedMatch;
   });
-  return [...cardsToFilter].sort((a, b) => { // 新しい配列に対してソート
-    const idA = parseInt(a.id, 10);
-    const idB = parseInt(b.id, 10);
-    if (sortOrder.value === 'asc') {
-      return idA - idB;
-    } else {
-      return idB - idA;
-    }
+  return [...cardsToFilter].sort((a, b) => {
+    const idA = parseInt(a.id, 10); const idB = parseInt(b.id, 10);
+    return sortOrder.value === 'asc' ? idA - idB : idB - idA;
   });
 });
-
 const rarityOptions = computed(() => Object.keys(rarityMapping));
 const attributeOptions = ref(['All', 'Cu', 'Co', 'Pa', 'Unknown']);
 
 onMounted(async () => {
-  console.log('App.vue onMounted started.');
   loadOwnedDataFromLocalStorage();
   await loadCardsForCurrentRarity();
   window.addEventListener('scroll', handleScroll);
-  console.log('App.vue onMounted finished.');
 });
-
 onUnmounted(() => {
   window.removeEventListener('scroll', handleScroll);
 });
-
 watch(selectedRarity, async (newRarity, oldRarity) => {
-  if (newRarity !== oldRarity && newRarity) {
-    await loadCardsForCurrentRarity();
-  }
+  if (newRarity !== oldRarity && newRarity) { await loadCardsForCurrentRarity(); }
 });
 </script>
 
 <template>
   <div id="app-container">
     <StarRankEditor v-if="isEditingStarRank" @back-to-checker="handleBackFromEditor" />
-
     <div v-else>
       <header class="app-header">
         <h1>デレステカードチェッカー</h1>
@@ -339,18 +282,21 @@ body {
   background-color: #0a0f1f;
   color: #e0e0e0;
   line-height: 1.6;
-  padding-top: 130px;
+  padding-top: 130px; /* ヘッダーの高さに合わせて調整 */
 }
 #app-container { max-width: 1200px; margin: 0 auto; padding: 20px; }
 .app-header { position: fixed; top: 0; left: 0; width: 100%; background: linear-gradient(135deg, #3c006b 0%, #002c5f 100%); color: white; padding: 12px 20px; box-shadow: 0 3px 8px rgba(0,0,0,0.25); z-index: 1000; box-sizing: border-box; }
 .app-header h1 { text-align: center; margin: 0 0 10px 0; font-size: 2em; font-weight: 700; color: #00f0ff; text-shadow: 0 0 5px #00f0ff, 0 0 10px rgba(0, 240, 255, 0.7); }
-.stats-bar { text-align: center; font-size: 0.9em; background-color: rgba(10, 15, 31, 0.7); padding: 10px; border-radius: 6px; margin-top: 8px; color: #c7d2fe; display: flex; justify-content: center; align-items: center; gap: 15px; border-top: 1px solid #303850; }
-.stats-bar p { margin: 0; }
+.stats-bar { text-align: center; font-size: 0.9em; background-color: rgba(10, 15, 31, 0.7); padding: 10px; border-radius: 6px; margin-top: 8px; color: #c7d2fe; display: flex; justify-content: center; align-items: center; gap: 15px; border-top: 1px solid #303850; flex-wrap: wrap; /* スマホで折り返すように */ }
+.stats-bar p { margin: 0; white-space: nowrap; /* 統計情報が途中で改行されないように */ }
 .main-content {}
 .controls, .filters { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; padding: 16px; background-color: rgba(27, 34, 59, 0.85); border-radius: 8px; border: 1px solid #4a5578; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
-.control-group, .filter-group { display: flex; align-items: center; gap: 8px; }
-label { font-weight: 500; color: #00f0ff; font-size: 0.9em; }
-select, .filter-input { padding: 10px 14px; border-radius: 4px; border: 1px solid #4a5578; background-color: #111827; color: #c7d2fe; font-size: 0.95em; flex-grow: 1; min-width: 150px; box-sizing: border-box; transition: border-color 0.2s ease, box-shadow 0.2s ease; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300f0ff'%3E%3Cpath d='M7 10l5 5 5-5H7z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; background-size: 1.2em; }
+.control-group { display: flex; align-items: center; gap: 8px; flex-basis: calc(50% - 8px); /* スマホで2列になるように調整 */ }
+.filter-group { display: flex; align-items: center; gap: 8px; flex-basis: calc(50% - 8px); /* スマホで2列になるように調整 */ }
+.filter-group:first-child { flex-basis: 100%; } /* 検索ボックスは1列 */
+
+label { font-weight: 500; color: #00f0ff; font-size: 0.9em; white-space: nowrap; }
+select, .filter-input { padding: 10px 14px; border-radius: 4px; border: 1px solid #4a5578; background-color: #111827; color: #c7d2fe; font-size: 0.95em; flex-grow: 1; min-width: 120px; /* 最小幅を少し小さく */ box-sizing: border-box; transition: border-color 0.2s ease, box-shadow 0.2s ease; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300f0ff'%3E%3Cpath d='M7 10l5 5 5-5H7z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; background-size: 1.2em; }
 .filter-input::placeholder { color: #808a9f; }
 select option { background-color: #111827; color: #e0e0e0; }
 select:focus, .filter-input:focus { border-color: #00f0ff; outline: none; box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.3), 0 0 10px rgba(0, 240, 255, 0.2); }
@@ -361,11 +307,12 @@ button:active { transform: translateY(0px) scale(1); box-shadow: inset 0 1px 3px
 .clear-all-button:hover { background-color: #c0392b; border-color: #a5281b;}
 .edit-star-rank-button { background-color: #ff00ff; color: #0a0f1f; border-color: #cc00cc;}
 .edit-star-rank-button:hover { background-color: #e600e6; border-color: #b300b3;}
-.sort-button { /* App.vueのソートボタン用 */
+.sort-button {
   padding: 10px 14px;
   background-color: #4a5578;
   color: #c7d2fe;
   border: 1px solid #303850;
+  flex-grow: 0; /* ソートボタンは幅を固定 */
 }
 .sort-button:hover {
   background-color: #303850;
@@ -375,4 +322,70 @@ button:active { transform: translateY(0px) scale(1); box-shadow: inset 0 1px 3px
 .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 20px; }
 .scroll-to-top-button { position: fixed; bottom: 30px; right: 30px; padding: 0; width: 50px; height: 50px; background-color: #00f0ff; color: #0a0f1f; border: none; border-radius: 50%; cursor: pointer; box-shadow: 0 0 15px rgba(0, 240, 255, 0.5), 0 0 25px rgba(0, 240, 255, 0.3); z-index: 1001; opacity: 0.9; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; font-size: 1.3em; text-shadow: none; }
 .scroll-to-top-button:hover { opacity: 1; transform: scale(1.15); box-shadow: 0 0 25px rgba(0, 240, 255, 0.7), 0 0 35px rgba(0, 240, 255, 0.5); }
+
+@media (max-width: 768px) {
+  body {
+    padding-top: 150px; /* スマホ時のヘッダー高さに応じて調整 */
+  }
+  .app-header h1 {
+    font-size: 1.6em; /* 少し調整 */
+    margin-bottom: 8px;
+  }
+  .stats-bar {
+    font-size: 0.8em;
+    flex-direction: column;
+    gap: 5px;
+    padding: 8px;
+  }
+  .edit-star-rank-button {
+    font-size: 0.85em;
+    padding: 8px 12px; /* 少し調整 */
+    margin-top: 5px;
+  }
+  .controls, .filters {
+    gap: 10px;
+    padding: 12px;
+    flex-direction: column; /* スマホではフィルターグループ全体を縦積み */
+  }
+  .control-group, .filter-group {
+    width: 100%; /* 各グループを横幅いっぱいに */
+    flex-basis: auto; /* flex-basis のリセット */
+    margin-bottom: 10px; /* グループ間のマージン */
+  }
+  .filter-group:last-child {
+      margin-bottom: 0;
+  }
+  select, .filter-input, .sort-button { /* ソートボタンも対象に */
+    min-width: 0; /* min-width リセット */
+    width: 100%;  /* 横幅いっぱい */
+    margin-bottom: 0; /* 個別のマージンはリセット */
+  }
+  .card-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .scroll-to-top-button {
+    bottom: 20px;
+    right: 20px;
+    width: 45px;
+    height: 45px;
+    font-size: 1.1em;
+  }
+}
+
+@media (max-width: 480px) {
+  body {
+    padding-top: 160px; /* ヘッダーの高さに応じて調整 */
+  }
+  .app-header h1 {
+    font-size: 1.4em;
+  }
+  .stats-bar {
+    font-size: 0.75em;
+  }
+  .card-grid {
+    grid-template-columns: repeat(2, 1fr); /* さらに狭い画面では2列表示 */
+    gap: 8px;
+  }
+}
 </style>
