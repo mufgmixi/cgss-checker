@@ -1,4 +1,5 @@
 <script setup>
+// ... (script部分は変更なし) ...
 import { ref, onMounted, onUnmounted, computed, defineEmits } from 'vue';
 import Papa from 'papaparse';
 
@@ -183,11 +184,11 @@ onUnmounted(() => {
              :src="card.local_image_url" :alt="card.name" class="editor-card-image-flat">
         <div class="editor-card-info-flat">
           <p class="editor-card-name-flat">{{ card.name }}</p>
-          <!-- ▼▼▼ 変更点 ▼▼▼ -->
+          <!-- ▼▼▼ ID表示のコメントを削除 ▼▼▼ -->
           <p class="editor-card-details-flat">
             {{ card.rarity }} | {{ card.attribute }} | {{ card.filter_category }}
           </p>
-          <!-- ▲▲▲ 変更点 ▲▲▲ -->
+          <!-- ▲▲▲ ID表示のコメントを削除 ▲▲▲ -->
           <div class="editor-star-selector-flat">
             <label :for="`star-edit-${card.id}`">スターランク:</label>
             <select :id="`star-edit-${card.id}`" @change="updateStarRank(card.id, $event)" :value="ownedCardsData[card.id] || 0">
@@ -362,8 +363,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  /* ▼▼▼ 追加: テキストがはみ出た場合に省略されるようにするため、infoコンテナの幅が適切に制限されるように */
-  min-width: 0; /* flexアイテムが縮小できるように */
+  min-width: 0; 
 }
 
 .editor-card-name-flat {
@@ -374,20 +374,15 @@ onUnmounted(() => {
   text-shadow: 0 0 4px #00aaff;
 }
 
-/* ▼▼▼ 変更点 ▼▼▼ */
 .editor-card-details-flat {
   margin: 0;
   font-size: 0.85em;
   color: #8899cc;
   line-height: 1.5;
-  white-space: nowrap;   /* テキストを1行に強制 */
-  overflow: hidden;        /* コンテナからはみ出す部分を隠す */
-  text-overflow: ellipsis; /* はみ出す部分を '...' で表示 */
-  /* width: 100%; */ /* ellipsis が機能するように、必要であれば幅を指定 */
-                     /* editor-card-info-flat に min-width:0 を追加したので、こちらは不要かも */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-/* .editor-card-details-flat span と span:not(:last-child):after のスタイルは削除しました */
-/* ▲▲▲ 変更点 ▲▲▲ */
 
 .editor-star-selector-flat {
   margin-top: 12px;
@@ -460,7 +455,7 @@ onUnmounted(() => {
 @media (max-width: 768px) {
   .editor-container-flat {
     padding: 15px;
-    margin-top: 100px; /* 固定ヘッダーの高さを考慮 */
+    margin-top: 100px;
   }
   .editor-header-flat {
     flex-direction: column;
@@ -490,8 +485,8 @@ onUnmounted(() => {
   }
 
   .editor-card-grid-flat {
-    grid-template-columns: repeat(2, 1fr); /* スマホで2列表示 */
-    gap: 12px;
+    grid-template-columns: repeat(2, 1fr); /* スマホで2列表示を維持 */
+    gap: 12px; /* gapは768pxの時と同じで良さそう */
   }
   .editor-card-item-flat {
     padding: 12px;
@@ -499,31 +494,26 @@ onUnmounted(() => {
     align-items: center;
   }
   .editor-card-image-flat {
-    width: 70px;
+    width: 70px; /* 2列表示でも画像サイズは維持 */
     margin-right: 0;
     margin-bottom: 10px;
   }
   .editor-card-info-flat {
     text-align: center;
-    width: 100%; /* スマホ表示で中央寄せやellipsisのために幅を明確に */
-    /* min-width: 0; はPC側で定義済みなのでここでは不要 */
+    width: 100%;
   }
   .editor-card-name-flat {
     font-size: 1.1em;
   }
 
-  /* ▼▼▼ 変更点 ▼▼▼ */
   .editor-card-details-flat {
-    font-size: 0.75em;
+    font-size: 0.75em; /* 既存のフォントサイズ調整を維持 */
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    text-align: center; /* スマホ表示時は中央寄せ */
-    width: 100%; /* 親要素(.editor-card-info-flat)がwidth:100%なので、こちらも合わせる */
-                  /* display: flex, flex-direction: columnなどは削除 */
+    text-align: center;
+    width: 100%;
   }
-  /* .editor-card-details-flat span:not(:last-child):after のスタイルは削除しました */
-  /* ▲▲▲ 変更点 ▲▲▲ */
 
   .editor-star-selector-flat {
     margin-top: 8px;
@@ -541,19 +531,34 @@ onUnmounted(() => {
   }
 }
 
+/* ▼▼▼ 480px以下のスタイルを変更 ▼▼▼ */
 @media (max-width: 480px) {
   .editor-card-grid-flat {
-    grid-template-columns: 1fr; /* さらに狭い画面では1列に */
+    grid-template-columns: repeat(2, 1fr); /* さらに狭い画面でも2列に */
+    gap: 8px; /* 少しgapを詰める */
   }
   .editor-header-flat h2 {
     font-size: 1.4em;
   }
   .editor-card-name-flat {
-    font-size: 1em;
+    font-size: 1em; /* 必要に応じてフォントサイズを微調整 */
   }
   .editor-card-details-flat {
-    font-size: 0.7em;
-    /* 他のスタイルは max-width: 768px から継承されるので、ここではフォントサイズのみ調整 */
+    font-size: 0.7em; /* 必要に応じてフォントサイズを微調整 */
+    /* 他のスタイルは max-width: 768px から継承 */
+  }
+  .editor-card-image-flat {
+    width: 60px; /* さらに狭い画面では画像を少し小さくする */
+  }
+  .editor-card-item-flat {
+    padding: 8px; /* カード全体のパディングも少し詰める */
+  }
+  .editor-star-selector-flat label {
+    font-size: 0.85em; /* スターランクのラベルも少し小さく */
+  }
+  .editor-star-selector-flat select {
+    font-size: 0.85em; /* スターランクのセレクトボックスも少し小さく */
   }
 }
+/* ▲▲▲ 480px以下のスタイルを変更 ▲▲▲ */
 </style>
