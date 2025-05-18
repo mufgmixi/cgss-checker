@@ -1,14 +1,13 @@
 <script setup>
-import { ref, onMounted, computed, defineEmits } from 'vue';
+import { ref, onMounted, onUnmounted, computed, defineEmits } from 'vue'; // onUnmounted を追加
 import Papa from 'papaparse';
 
 const emit = defineEmits(['back-to-checker']);
 
 const allCardsForEditing = ref([]);
-const ownedCardsData = ref({}); // localStorageから読み込んだスターランクデータ
+const ownedCardsData = ref({});
 const isLoading = ref(false);
 
-// App.vue と同じマッピングを使用
 const rarityMapping = {
   'ノーマル': { folder: 'N', csv: 'cgss_n_card_list.csv' },
   'レア':    { folder: 'R', csv: 'cgss_r_card_list.csv' },
@@ -16,11 +15,28 @@ const rarityMapping = {
   'SSレア':  { folder: 'SSR', csv: 'cgss_ssr_card_list.csv' }
 };
 
+// --- トップに戻るボタン用の状態とロジック (StarRankEditor.vue 用) ---
+const showEditorScrollToTopButton = ref(false);
+const editorScrollThreshold = 200;
+
+const handleEditorScroll = () => {
+  if (window.scrollY > editorScrollThreshold) {
+    showEditorScrollToTopButton.value = true;
+  } else {
+    showEditorScrollToTopButton.value = false;
+  }
+};
+
+const scrollToEditorTop = () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+// --- ここまでトップに戻るボタン用 ---
+
 async function loadAllCsvData() {
   isLoading.value = true;
   const loadedCards = [];
   const rarityKeys = Object.keys(rarityMapping);
-  const baseUrl = import.meta.env.BASE_URL; // ベースURLをここで一度取得
+  const baseUrl = import.meta.env.BASE_URL;
 
   for (const rarityKey of rarityKeys) {
     const targetRarityInfo = rarityMapping[rarityKey];
@@ -28,15 +44,9 @@ async function loadAllCsvData() {
       console.error(`[Editor] CSV file mapping not found for rarity: ${rarityKey}`);
       continue;
     }
-
     const csvPath = `data/csv/${targetRarityInfo.csv}`;
-    // ベースURLの末尾が '/' かどうかで結合方法を調整
     let filePath = baseUrl.endsWith('/') ? `${baseUrl}${csvPath}` : `${baseUrl}/${csvPath}`;
-    // ローカル開発時などでbaseUrlが単に'/'の場合、filePathが'//data/...'になるのを防ぐ
-    if (filePath.startsWith('//')) {
-      filePath = filePath.substring(1);
-    }
-
+    if (filePath.startsWith('//')) { filePath = filePath.substring(1); }
     console.log(`[Editor] Fetching CSV for ${rarityKey} from ${filePath}...`);
 
     try {
@@ -46,52 +56,34 @@ async function loadAllCsvData() {
         continue;
       }
       const csvText = await response.text();
-      console.log(`[Editor] CSV text for ${rarityKey} fetched successfully (length: ${csvText.length}).`);
-
       const parseResult = await new Promise((resolve, reject) => {
-        Papa.parse(csvText, {
-          header: true,
-          skipEmptyLines: true,
-          complete: resolve,
-          error: reject
-        });
+        Papa.parse(csvText, { header: true, skipEmptyLines: true, complete: resolve, error: reject });
       });
-
-      console.log(`[Editor] PapaParse results for ${rarityKey}:`, parseResult);
       if (parseResult.errors && parseResult.errors.length > 0) {
         console.warn(`[Editor] PapaParse errors for ${rarityKey}:`, parseResult.errors);
       }
-
       const processedData = parseResult.data
         .filter(card => card && typeof card.id === 'string' && card.id.trim() !== '' && typeof card.name === 'string' && card.name.trim() !== '')
         .map(card => {
             const cardRarityTrimmed = String(card.rarity || '').trim();
             const currentRarityFolder = rarityMapping[cardRarityTrimmed] ? rarityMapping[cardRarityTrimmed].folder : 'unknown';
             if (!rarityMapping[cardRarityTrimmed]) {
-                console.warn(`[Editor] No rarityMapping folder for card rarity: '${cardRarityTrimmed}' ID ${card.id}, using 'unknown' folder.`);
+                console.warn(`[Editor] No rarityMapping folder for card rarity: '${cardRarityTrimmed}' ID ${card.id}`);
             }
-
             const cardId = String(card.id).trim();
             let cardNameForFile = String(card.name).trim().replace(/[\\/:*?"<>|#]/g, '_');
             const filename = `${cardId}_${cardNameForFile}.jpg`;
-
             const imagePath = `data/images/${currentRarityFolder}/${filename}`;
             let localImageUrl = baseUrl.endsWith('/') ? `${baseUrl}${imagePath}` : `${baseUrl}/${imagePath}`;
-            if (localImageUrl.startsWith('//')) {
-                localImageUrl = localImageUrl.substring(1);
-            }
-
+            if (localImageUrl.startsWith('//')) { localImageUrl = localImageUrl.substring(1); }
             return {
-                id: cardId,
-                name: String(card.name).trim(),
-                rarity: cardRarityTrimmed,
+                id: cardId, name: String(card.name).trim(), rarity: cardRarityTrimmed,
                 attribute: String(card.attribute || 'Unknown').trim(),
                 availability: String(card.availability || '').trim(),
                 filter_category: String(card.filter_category || 'その他').trim(),
                 local_image_url: localImageUrl,
             };
         });
-      console.log(`[Editor] Processed data for ${rarityKey} (length: ${processedData.length}):`, processedData.slice(0,1));
       loadedCards.push(...processedData);
     } catch (error) {
       console.error(`[Editor] Error loading/parsing CSV for ${rarityKey}:`, error);
@@ -99,44 +91,24 @@ async function loadAllCsvData() {
   }
   allCardsForEditing.value = loadedCards.sort((a,b) => parseInt(a.id, 10) - parseInt(b.id, 10));
   isLoading.value = false;
-  console.log('[Editor] All cards loaded for editing. Total:', allCardsForEditing.value.length);
-  if (allCardsForEditing.value.length === 0 && !isLoading.value) {
-      console.warn('[Editor] No cards were loaded into allCardsForEditing. Check CSV paths, content, and console logs.');
-  }
 }
 
 function loadOwnedData() {
   const data = localStorage.getItem('cgssOwnedCards');
-  if (data) {
-    try {
-      ownedCardsData.value = JSON.parse(data);
-    } catch (e) {
-      console.error('[Editor] Failed to parse owned cards from localStorage:', e);
-      ownedCardsData.value = {};
-    }
-  }
+  if (data) { try { ownedCardsData.value = JSON.parse(data); } catch (e) { ownedCardsData.value = {}; } }
 }
 
 function updateStarRank(cardId, event) {
   const newStarRank = parseInt(event.target.value, 10);
   const cardIdStr = String(cardId);
-
-  if (newStarRank > 0) {
-    ownedCardsData.value[cardIdStr] = newStarRank;
-  } else {
-    delete ownedCardsData.value[cardIdStr];
-  }
+  if (newStarRank > 0) { ownedCardsData.value[cardIdStr] = newStarRank; }
+  else { delete ownedCardsData.value[cardIdStr]; }
   localStorage.setItem('cgssOwnedCards', JSON.stringify(ownedCardsData.value));
-  console.log(`[Editor] Star rank for card ID ${cardIdStr} updated to ${newStarRank}`);
 }
 
 const getMaxStarRank = (rarity) => {
   switch (rarity) {
-    case 'ノーマル': return 5;
-    case 'レア': return 10;
-    case 'Sレア': return 15;
-    case 'SSレア': return 20;
-    default: return 0;
+    case 'ノーマル': return 5; case 'レア': return 10; case 'Sレア': return 15; case 'SSレア': return 20; default: return 0;
   }
 };
 
@@ -144,6 +116,11 @@ const editorSearchTerm = ref('');
 const editorSelectedRarity = ref('All');
 const editorSelectedAttribute = ref('All');
 const editorSelectedFilterCategory = ref('All');
+const editorSortOrder = ref('asc'); // 'asc' or 'desc' for StarRankEditor
+
+const toggleEditorSortOrder = () => {
+  editorSortOrder.value = editorSortOrder.value === 'asc' ? 'desc' : 'asc';
+};
 
 const editorRarityOptions = computed(() => ['All', ...Object.keys(rarityMapping)]);
 const editorAttributeOptions = computed(() => {
@@ -158,24 +135,38 @@ const editorFilterCategoryOptions = computed(() => {
 });
 
 const filteredCardsForEditing = computed(() => {
-  return allCardsForEditing.value.filter(card => {
+  let cardsToFilter = allCardsForEditing.value;
+  if (!Array.isArray(cardsToFilter)) return [];
+  cardsToFilter = cardsToFilter.filter(card => {
     const nameMatch = card.name.toLowerCase().includes(editorSearchTerm.value.toLowerCase());
     const rarityMatch = editorSelectedRarity.value === 'All' || card.rarity === editorSelectedRarity.value;
     const attributeMatch = editorSelectedAttribute.value === 'All' || card.attribute === editorSelectedAttribute.value;
     const categoryMatch = editorSelectedFilterCategory.value === 'All' || card.filter_category === editorSelectedFilterCategory.value;
     return nameMatch && rarityMatch && attributeMatch && categoryMatch;
   });
+  return [...cardsToFilter].sort((a, b) => { // 新しい配列に対してソート
+    const idA = parseInt(a.id, 10);
+    const idB = parseInt(b.id, 10);
+    if (editorSortOrder.value === 'asc') {
+      return idA - idB;
+    } else {
+      return idB - idA;
+    }
+  });
 });
 
-const goBackToChecker = () => {
-  emit('back-to-checker');
-};
+const goBackToChecker = () => { emit('back-to-checker'); };
 
 onMounted(async () => {
   console.log('StarRankEditor.vue onMounted started.');
   loadOwnedData();
   await loadAllCsvData();
+  window.addEventListener('scroll', handleEditorScroll);
   console.log('StarRankEditor.vue onMounted finished.');
+});
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', handleEditorScroll);
 });
 </script>
 
@@ -203,6 +194,9 @@ onMounted(async () => {
           {{ category === 'All' ? '全カテゴリ' : category }}
         </option>
       </select>
+      <button @click="toggleEditorSortOrder" class="sort-button-editor">
+        ID順: {{ editorSortOrder === 'asc' ? '昇順' : '降順' }}
+      </button>
     </div>
 
     <div v-if="isLoading" class="loading-indicator-flat">
@@ -241,6 +235,9 @@ onMounted(async () => {
       <p>データが読み込めませんでした。CSVファイルの配置や内容を確認してください。</p>
       <p>(コンソールログも確認してください)</p>
     </div>
+     <button v-if="showEditorScrollToTopButton" @click="scrollToEditorTop" class="scroll-to-top-button-editor">
+      ↑ Top
+    </button>
   </div>
 </template>
 
@@ -303,7 +300,7 @@ onMounted(async () => {
   border-radius: 6px;
   border: 1px solid #4a5578;
 }
-.filter-input-flat, .filter-select-flat {
+.filter-input-flat, .filter-select-flat, .sort-button-editor { /* sort-button-editor も同じスタイルを適用 */
   padding: 12px 15px;
   border-radius: 4px;
   border: 1px solid #4a5578;
@@ -311,18 +308,39 @@ onMounted(async () => {
   color: #c7d2fe;
   font-size: 0.95em;
   flex-grow: 1;
-  min-width: 180px;
+  min-width: 180px; /* 最小幅を少し調整 */
   box-sizing: border-box;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  text-align: left; /* ボタンのテキストも左寄せに */
 }
 .filter-input-flat::placeholder {
   color: #808a9f;
 }
-.filter-input-flat:focus, .filter-select-flat:focus {
+.filter-input-flat:focus, .filter-select-flat:focus, .sort-button-editor:focus {
   border-color: #00f0ff;
   outline: none;
   box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.3), 0 0 10px rgba(0, 240, 255, 0.2);
 }
+.filter-select-flat, .sort-button-editor { /* select と button にカスタム矢印などを適用 */
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300f0ff'%3E%3Cpath d='M7 10l5 5 5-5H7z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 1.2em;
+  padding-right: 30px; /* 矢印スペース確保 */
+}
+.sort-button-editor { /* ボタン特有のスタイル */
+  background-image: none; /* ボタンには矢印不要 */
+  padding-right: 15px; /* 矢印がないのでパディング戻す */
+  text-align: center;
+  flex-grow: 0; /* ボタンは幅を固定にする場合 */
+  min-width: auto;
+}
+.sort-button-editor:hover {
+  background-color: #303850;
+  border-color: #00f0ff;
+}
+
 
 .loading-indicator-flat, .no-cards-message-flat {
   text-align: center;
@@ -406,8 +424,8 @@ onMounted(async () => {
 }
 .editor-star-selector-flat label {
   font-size: 0.95em;
-  color: #f0ff00; /* 蛍光イエロー */
-  text-shadow: 0 0 3px #f0ff00, 0 0 6px rgba(240, 255, 0, 0.7); /* イエローのグロー */
+  color: #f0ff00;
+  text-shadow: 0 0 3px #f0ff00, 0 0 6px rgba(240, 255, 0, 0.7);
   white-space: nowrap;
   font-weight: 500;
 }
@@ -417,11 +435,11 @@ onMounted(async () => {
   border: 1px solid #4a5578;
   font-size: 0.95em;
   background-color: #0a0c1a;
-  color: #f0ff00; /* 蛍光イエロー */
+  color: #f0ff00;
   flex-grow: 1;
   cursor: pointer;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23f0ff00'%3E%3Cpath d='M7 10l5 5 5-5H7z'/%3E%3C/svg%3E"); /* 矢印もイエローに */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23f0ff00'%3E%3Cpath d='M7 10l5 5 5-5H7z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
   background-size: 1.2em;
@@ -436,53 +454,32 @@ onMounted(async () => {
   outline: none;
   box-shadow: 0 0 0 3px rgba(255, 0, 255, 0.3), 0 0 10px rgba(255, 0, 255, 0.2);
 }
-/* ▼▼▼ スマホなどの狭い画面向けのスタイル ▼▼▼ */
-@media (max-width: 768px) {
-  .editor-container-flat {
-    padding: 15px;
-  }
-  .editor-header-flat h2 {
-    font-size: 1.5em;
-  }
-  .back-button-flat {
-    padding: 8px 15px;
-    font-size: 0.85em;
-  }
-  .editor-filters-flat {
-    gap: 10px;
-    padding: 12px;
-  }
-  .filter-input-flat, .filter-select-flat {
-    min-width: 100%; /* 狭い画面では各フィルターを横幅いっぱいに */
-    flex-grow: 0;
-  }
 
-  .editor-card-grid-flat {
-    grid-template-columns: 1fr; /* スマホでは1列表示 */
-    gap: 15px;
-  }
-  .editor-card-item-flat {
-    padding: 12px;
-    /* 必要であれば画像と情報の配置を縦並びに変更 */
-    /* flex-direction: column;
-    align-items: flex-start; */
-  }
-  .editor-card-image-flat {
-    width: 60px; /* 画像を少し小さく */
-    /* height: auto; */ /* 縦並びにするなら */
-    margin-right: 12px;
-    /* margin-bottom: 10px; */ /* 縦並びにするなら */
-  }
-  .editor-card-name-flat {
-    font-size: 1.1em;
-  }
-  .editor-card-details-flat {
-    font-size: 0.8em;
-    /* 必要であれば | 区切りをやめて改行表示なども検討 */
-  }
-  .editor-star-selector-flat label,
-  .editor-star-selector-flat select {
-    font-size: 0.9em;
-  }
+.scroll-to-top-button-editor {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  padding: 0;
+  width: 50px;
+  height: 50px;
+  background-color: #00f0ff;
+  color: #0a0f1f;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.5), 0 0 25px rgba(0, 240, 255, 0.3);
+  z-index: 1001;
+  opacity: 0.9;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3em;
+  text-shadow: none;
+}
+.scroll-to-top-button-editor:hover {
+  opacity: 1;
+  transform: scale(1.15);
+  box-shadow: 0 0 25px rgba(0, 240, 255, 0.7), 0 0 35px rgba(0, 240, 255, 0.5);
 }
 </style>

@@ -22,7 +22,9 @@ const searchTerm = ref('');
 const selectedAttribute = ref('All');
 const showOwned = ref('All');
 const selectedFilterCategory = ref('All');
+const sortOrder = ref('asc'); // 'asc' or 'desc' for App.vue card list
 
+// --- トップに戻るボタン用の状態とロジック ---
 const showScrollToTopButton = ref(false);
 const scrollThreshold = 200;
 
@@ -34,6 +36,7 @@ const scrollToTop = () => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
+// --- 全チェッククリア用のメソッド ---
 const clearAllOwnedChecks = () => {
   if (confirm('本当に全てのカードの所持情報（スターランク含む）をクリアしますか？この操作は元に戻せません。')) {
     ownedCards.value = {};
@@ -42,6 +45,7 @@ const clearAllOwnedChecks = () => {
   }
 };
 
+// --- スターランク編集画面遷移用メソッド ---
 const goToStarRankEditor = () => {
   isEditingStarRank.value = true;
 };
@@ -58,26 +62,14 @@ async function loadCsvData(rarityKey) {
     console.error(`CSV file mapping not found for rarity: ${rarityKey}`);
     return [];
   }
-
-  // ▼▼▼ URLの構築方法を修正 ▼▼▼
-  const baseUrl = import.meta.env.BASE_URL; // ビルド設定からベースURLを取得
-  const csvPath = `data/csv/${targetRarityInfo.csv}`; // public内のパス (先頭の/は不要)
-  // baseUrlが '/' で終わっていない場合、かつ csvPath が '/' で始まっていない場合に / を挟む
-  let filePath = baseUrl.endsWith('/') ? baseUrl + csvPath : `${baseUrl}/${csvPath}`;
-  // もし baseUrl が空文字列（ローカル開発時でbaseが'/'の場合など）で、filePathが '//' で始まるのを防ぐ
-  if (baseUrl === '/' && filePath.startsWith('//')) {
+  const baseUrl = import.meta.env.BASE_URL;
+  const csvPath = `data/csv/${targetRarityInfo.csv}`;
+  let filePath = baseUrl.endsWith('/') ? `${baseUrl}${csvPath}` : `${baseUrl}/${csvPath}`;
+  if (filePath.startsWith('//')) { // baseUrlが '/' の場合の重複スラッシュを修正
     filePath = filePath.substring(1);
-  } else if (baseUrl !== '/' && !filePath.startsWith(baseUrl)) {
-    // デプロイ時、baseUrlが正しく付与されていない場合（稀なケースのフォールバック）
-    // 通常は import.meta.env.BASE_URL が正しく設定されていれば不要
-    if (!baseUrl.endsWith('/')) filePath = `/${filePath}`;
-    filePath = `${baseUrl}${filePath}`;
   }
-  // ▲▲▲ URLの構築方法を修正 ▲▲▲
-
   isLoading.value = true;
   console.log(`Fetching CSV for ${rarityKey} from ${filePath}...`);
-
   try {
     const response = await fetch(filePath);
     if (!response.ok) {
@@ -85,17 +77,11 @@ async function loadCsvData(rarityKey) {
       return [];
     }
     const csvText = await response.text();
-    console.log(`CSV text for ${rarityKey} fetched successfully.`);
-
     return new Promise((resolve, reject) => {
       Papa.parse(csvText, {
         header: true,
         skipEmptyLines: true,
         complete: (results) => {
-          console.log(`PapaParse results for ${rarityKey}:`, results);
-          if (results.errors && results.errors.length > 0) {
-            console.warn(`PapaParse errors for ${rarityKey}:`, results.errors);
-          }
           const processedData = results.data
             .filter(card => card && typeof card.id === 'string' && card.id.trim() !== '' && typeof card.name === 'string' && card.name.trim() !== '')
             .map(card => {
@@ -104,33 +90,21 @@ async function loadCsvData(rarityKey) {
               const cardId = String(card.id).trim();
               let cardNameForFile = String(card.name).trim().replace(/[\\/:*?"<>|#]/g, '_');
               const filename = `${cardId}_${cardNameForFile}.jpg`;
-              // 画像パスも同様にBASE_URLを考慮する必要があるかもしれないが、通常はpublicからの絶対パスで解決される
               const imageBase = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
               let localImageUrl = `${imageBase}data/images/${currentRarityFolder}/${filename}`;
-              if (imageBase === '/' && localImageUrl.startsWith('//')) {
+              if (localImageUrl.startsWith('//')) { // baseUrlが '/' の場合の重複スラッシュを修正
                 localImageUrl = localImageUrl.substring(1);
               }
-
-
               return {
-                id: cardId,
-                name: String(card.name).trim(),
-                rarity: cardRarityTrimmed,
-                image_url: String(card.image_url || '').trim(),
-                detail_url: String(card.detail_url || '').trim(),
-                attribute: String(card.attribute || 'Unknown').trim(),
-                availability: String(card.availability || '').trim(),
-                filter_category: String(card.filter_category || 'その他').trim(),
-                local_image_url: localImageUrl,
+                id: cardId, name: String(card.name).trim(), rarity: cardRarityTrimmed,
+                image_url: String(card.image_url || '').trim(), detail_url: String(card.detail_url || '').trim(),
+                attribute: String(card.attribute || 'Unknown').trim(), availability: String(card.availability || '').trim(),
+                filter_category: String(card.filter_category || 'その他').trim(), local_image_url: localImageUrl,
               };
             });
-          console.log(`Processed data for ${rarityKey} (first 1 item):`, processedData.slice(0, 1));
           resolve(processedData);
         },
-        error: (error) => {
-          console.error(`Error parsing ${filePath}:`, error);
-          reject(error);
-        }
+        error: (error) => reject(error)
       });
     });
   } catch (error) {
@@ -165,14 +139,14 @@ function handleToggleStarRankBasic({ cardId }) {
   const cardIdStr = String(cardId);
   const currentStar = ownedCards.value[cardIdStr] || 0;
   const newStarRank = currentStar > 0 ? 0 : 1;
-
-  if (newStarRank > 0) {
-    ownedCards.value[cardIdStr] = newStarRank;
-  } else {
-    delete ownedCards.value[cardIdStr];
-  }
+  if (newStarRank > 0) { ownedCards.value[cardIdStr] = newStarRank; }
+  else { delete ownedCards.value[cardIdStr]; }
   saveOwnedDataToLocalStorage();
 }
+
+const toggleSortOrder = () => {
+  sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc';
+};
 
 const cardsForSelectedRarity = computed(() => {
   const rawData = allCardsRaw.value[selectedRarity.value];
@@ -217,10 +191,10 @@ const filterCategoryOptions = computed(() => {
 });
 
 const filteredCards = computed(() => {
-  const currentCards = cardsForSelectedRarity.value;
-  if (!Array.isArray(currentCards)) return [];
+  let cardsToFilter = cardsForSelectedRarity.value;
+  if (!Array.isArray(cardsToFilter)) return [];
   const term = searchTerm.value.toLowerCase();
-  return currentCards.filter(card => {
+  cardsToFilter = cardsToFilter.filter(card => {
     const nameMatch = card.name && typeof card.name === 'string' && card.name.toLowerCase().includes(term);
     const attributeMatch = selectedAttribute.value === 'All' || card.attribute === selectedAttribute.value;
     const categoryMatch = selectedFilterCategory.value === 'All' || card.filter_category === selectedFilterCategory.value;
@@ -228,6 +202,15 @@ const filteredCards = computed(() => {
     if (showOwned.value === 'Owned') ownedMatch = card.starRank > 0;
     else if (showOwned.value === 'NotOwned') ownedMatch = card.starRank === 0;
     return nameMatch && attributeMatch && categoryMatch && ownedMatch;
+  });
+  return [...cardsToFilter].sort((a, b) => { // 新しい配列に対してソート
+    const idA = parseInt(a.id, 10);
+    const idB = parseInt(b.id, 10);
+    if (sortOrder.value === 'asc') {
+      return idA - idB;
+    } else {
+      return idB - idA;
+    }
   });
 });
 
@@ -313,6 +296,11 @@ watch(selectedRarity, async (newRarity, oldRarity) => {
               <option value="NotOwned">未所持(☆0)</option>
             </select>
           </div>
+          <div class="filter-group">
+            <button @click="toggleSortOrder" class="sort-button">
+              ID順: {{ sortOrder === 'asc' ? '昇順' : '降順' }}
+            </button>
+          </div>
         </div>
 
         <div v-if="isLoading" class="loading-indicator">
@@ -373,81 +361,18 @@ button:active { transform: translateY(0px) scale(1); box-shadow: inset 0 1px 3px
 .clear-all-button:hover { background-color: #c0392b; border-color: #a5281b;}
 .edit-star-rank-button { background-color: #ff00ff; color: #0a0f1f; border-color: #cc00cc;}
 .edit-star-rank-button:hover { background-color: #e600e6; border-color: #b300b3;}
+.sort-button { /* App.vueのソートボタン用 */
+  padding: 10px 14px;
+  background-color: #4a5578;
+  color: #c7d2fe;
+  border: 1px solid #303850;
+}
+.sort-button:hover {
+  background-color: #303850;
+}
 .loading-indicator, .no-cards { text-align: center; padding: 40px 20px; font-size: 1.1em; color: #9ca3af; background-color: rgba(27, 34, 59, 0.8); border-radius: 8px; margin-top: 24px; border: 1px solid #4a5578;}
 .no-cards p { margin: 8px 0; }
 .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 20px; }
 .scroll-to-top-button { position: fixed; bottom: 30px; right: 30px; padding: 0; width: 50px; height: 50px; background-color: #00f0ff; color: #0a0f1f; border: none; border-radius: 50%; cursor: pointer; box-shadow: 0 0 15px rgba(0, 240, 255, 0.5), 0 0 25px rgba(0, 240, 255, 0.3); z-index: 1001; opacity: 0.9; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; font-size: 1.3em; text-shadow: none; }
 .scroll-to-top-button:hover { opacity: 1; transform: scale(1.15); box-shadow: 0 0 25px rgba(0, 240, 255, 0.7), 0 0 35px rgba(0, 240, 255, 0.5); }
-
-/* ... (既存のPC向けスタイルはそのまま) ... */
-
-/* ▼▼▼ スマホなどの狭い画面向けのスタイル (例: 画面幅が768px以下の場合) ▼▼▼ */
-@media (max-width: 768px) {
-  body {
-    padding-top: 100px; /* ヘッダーの高さに合わせて調整 */
-  }
-
-  #app-container {
-    padding: 10px; /* 全体のパディングを少し狭く */
-  }
-
-  .app-header h1 {
-    font-size: 1.5em; /* タイトルを少し小さく */
-    margin-bottom: 8px;
-  }
-  .stats-bar {
-    font-size: 0.8em; /* 統計情報を少し小さく */
-    flex-direction: column; /* 統計情報を縦並びに */
-    gap: 5px;
-    padding: 8px;
-  }
-  .stats-bar p {
-    /* 必要であれば個別のマージン調整 */
-  }
-  .edit-star-rank-button {
-    font-size: 0.85em;
-    padding: 6px 10px;
-    margin-top: 5px;
-  }
-
-  .controls, .filters {
-    gap: 10px; /* 要素間の隙間を少し狭く */
-    padding: 10px;
-  }
-  .filter-input-flat, .filter-select-flat, /* StarRankEditorのクラス名に合わせて調整 */
-  select, .filter-input { /* App.vue のフィルター */
-    min-width: 100%; /* 狭い画面では各フィルターを横幅いっぱいに */
-    flex-grow: 0; /* 均等に広がるのを防ぐ */
-  }
-  .control-group { /* 全チェッククリアボタンのコンテナ */
-    width: 100%;
-  }
-  .clear-all-button {
-    width: 100%; /* ボタンも横幅いっぱいにするなど */
-  }
-
-  .card-grid {
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); /* スマホではカードを少し小さめに */
-    gap: 10px;
-  }
-
-  .scroll-to-top-button {
-    bottom: 20px;
-    right: 20px;
-    width: 45px;
-    height: 45px;
-    font-size: 1.1em;
-  }
-}
-
-/* さらに狭い画面向け (例: 480px以下) の調整も必要に応じて追加 */
-@media (max-width: 480px) {
-  .app-header h1 {
-    font-size: 1.3em;
-  }
-  .card-grid {
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); /* さらに小さく */
-  }
-  /* 必要に応じてフォントサイズなどをさらに調整 */
-}
 </style>
